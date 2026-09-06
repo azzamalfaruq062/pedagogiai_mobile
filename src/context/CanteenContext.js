@@ -26,14 +26,18 @@ export const CanteenProvider = ({ children }) => {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoadingWallet, setIsLoadingWallet] = useState(false);
+  const [isLoadingProducts, setIsLoadingProducts] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [walletError, setWalletError] = useState(null);
 
   /**
-   * Fetch live wallet info and transaction history from Laravel Sanctum API
+   * Fetch live wallet info, transaction history, and products from Laravel API
    */
   const fetchWalletData = useCallback(async (silent = false) => {
-    if (!silent) setIsLoadingWallet(true);
+    if (!silent) {
+      setIsLoadingWallet(true);
+      setIsLoadingProducts(true);
+    }
     setWalletError(null);
 
     try {
@@ -84,7 +88,6 @@ export const CanteenProvider = ({ children }) => {
           balanceAfter: item.balance_after,
         }));
 
-        // Set live user transactions list (clears dummy data if user has no transactions)
         setTransactions(mappedTx);
       } else {
         setTransactions([]);
@@ -93,24 +96,28 @@ export const CanteenProvider = ({ children }) => {
       // 3. Fetch live products and categories from backend
       try {
         const prodRes = await walletApi.getCanteenProducts();
-        if (prodRes?.success && Array.isArray(prodRes?.data?.products) && prodRes.data.products.length > 0) {
+        if (prodRes?.success && Array.isArray(prodRes?.data?.products)) {
           const apiProducts = prodRes.data.products.map((p) => ({
             id: p.id,
             backendId: p.id,
             code: p.code,
             name: p.name,
-            price: Number(p.price),
-            formattedPrice: p.formatted_price,
-            stock: p.stock,
-            isUnlimitedStock: p.is_unlimited_stock,
-            isOpenPrice: p.is_open_price,
-            imageUrl: p.image || 'https://images.unsplash.com/photo-1603133872878-684f208fb84b?w=500&auto=format&fit=crop&q=80',
+            price: Number(p.price) || 0,
+            formattedPrice: p.formatted_price || `Rp ${Number(p.price || 0).toLocaleString('id-ID')}`,
+            stock: Number(p.stock) || 0,
+            isUnlimitedStock: Boolean(p.is_unlimited_stock),
+            isOpenPrice: Boolean(p.is_open_price),
+            imageUrl: p.image || null,
             stall: p.canteen_name || 'Kantin Sekolah',
-            category: p.category_name?.toLowerCase() || 'meals',
-            isAvailable: p.stock > 0 || p.is_unlimited_stock,
+            category: p.category_slug || (p.category_name ? p.category_name.toLowerCase().replace(/\s+/g, '-') : 'makanan'),
+            categoryId: p.category_id,
+            categoryName: p.category_name || 'Lainnya',
+            categorySlug: p.category_slug || (p.category_name ? p.category_name.toLowerCase().replace(/\s+/g, '-') : 'makanan'),
+            description: p.description || `${p.name} lezat dari ${p.canteen_name || 'Kantin Sekolah'}.`,
+            isAvailable: p.stock > 0 || Boolean(p.is_unlimited_stock),
             rating: 4.9,
             ordersCount: 120,
-            prepTime: '5 mnt',
+            prepTime: '5-10 mnt',
             badge: p.stock < 10 && !p.is_unlimited_stock ? 'Sisa Sedikit' : null,
           }));
           setProducts(apiProducts);
@@ -120,15 +127,20 @@ export const CanteenProvider = ({ children }) => {
               { id: 'all', name: 'Semua', icon: 'restaurant-outline' },
               ...prodRes.data.categories.map((c) => ({
                 id: c.slug || String(c.id),
+                dbId: c.id,
+                slug: c.slug,
                 name: c.name,
                 icon: c.icon || 'fast-food-outline',
               })),
             ];
             setCategories(apiCats);
           }
+        } else {
+          setProducts([]);
         }
       } catch (prodErr) {
-        console.log('Using default canteen products fallback');
+        console.log('Error fetching canteen products:', prodErr?.message || prodErr);
+        setProducts([]);
       }
 
     } catch (err) {
@@ -136,6 +148,7 @@ export const CanteenProvider = ({ children }) => {
       setWalletError(err?.message || 'Gagal memuat data dompet dari server');
     } finally {
       setIsLoadingWallet(false);
+      setIsLoadingProducts(false);
       setIsRefreshing(false);
     }
   }, [user]);
@@ -389,6 +402,7 @@ export const CanteenProvider = ({ children }) => {
         fetchWalletData,
         refreshWallet,
         isLoadingWallet,
+        isLoadingProducts,
         isRefreshing,
         walletError,
       }}

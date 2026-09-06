@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Linking,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -20,6 +21,8 @@ import { useTheme } from '../../../hooks/useTheme';
 import { useAuth } from '../../../hooks/useAuth';
 import { dashboardApi } from '../../../api/dashboardApi';
 import { courseApi } from '../../../api/courseApi';
+import { CONFIG } from '../../../config';
+import { TeacherScheduleSkeleton } from '../../../components/common/SkeletonLoader';
 import AppButton from '../../../components/common/AppButton';
 
 export default function GuruDashboardView({
@@ -218,7 +221,7 @@ export default function GuruDashboardView({
   const teacherStats = [
     {
       label: 'TOTAL SISWA',
-      value: String(stats.studentsCount || '28'),
+      value: String(stats.studentsCount ?? 0),
       sub: 'Siswa Aktif',
       icon: 'people',
       color: '#4F46E5',
@@ -227,7 +230,7 @@ export default function GuruDashboardView({
     },
     {
       label: 'KELAS DIAJAR',
-      value: String(stats.classesCount || '4'),
+      value: String(stats.classesCount ?? 0),
       sub: 'Kelas Aktif',
       icon: 'school',
       color: '#10B981',
@@ -236,7 +239,7 @@ export default function GuruDashboardView({
     },
     {
       label: 'KURSUS DIBINA',
-      value: String(courses.length || stats.coursesCount || '2'),
+      value: String(courses.length || stats.coursesCount || 0),
       sub: 'Tersedia',
       icon: 'library',
       color: '#F59E0B',
@@ -245,7 +248,7 @@ export default function GuruDashboardView({
     },
     {
       label: 'JAM MENGAJAR',
-      value: `${stats.teachingHours || 18} Jam`,
+      value: `${stats.teachingHours ?? 0} Jam`,
       sub: 'Minggu Ini',
       icon: 'time',
       color: '#8B5CF6',
@@ -273,24 +276,10 @@ export default function GuruDashboardView({
     return formatted.charAt(0).toUpperCase() + formatted.slice(1);
   })();
 
-  const pendingTasks = [
-    {
-      id: 'task_1',
-      studentName: 'Ahmad Siswa',
-      class: 'XII MIPA 2',
-      title: 'Praktikum Percabangan Python',
-      submittedAt: '08:30 WIB',
-      score: null,
-    },
-    {
-      id: 'task_2',
-      studentName: 'Citra Wijaya',
-      class: 'XII MIPA 2',
-      title: 'Tugas Logika Boolean Mandiri',
-      submittedAt: '09:10 WIB',
-      score: null,
-    },
-  ];
+  // Use real pending tasks from backend API
+  const pendingTasks = Array.isArray(dashboardData?.pendingTasks)
+    ? dashboardData.pendingTasks
+    : [];
 
   return (
     <View style={styles.container}>
@@ -573,32 +562,54 @@ export default function GuruDashboardView({
 
         {/* Timeline Content */}
         <View style={styles.timelineContainer}>
-          {/* Vertical Connecting Line — only show when there are schedules */}
-          {todaySchedules.length > 0 && (
-            <View
-              style={[
-                styles.timelineTrackLine,
-                { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.12)' : '#E2E8F0' },
-              ]}
-            />
-          )}
-
-          {/* Empty State — no schedule today */}
-          {todaySchedules.length === 0 && (
+          {/* 1. SKELETON LOADER STATE */}
+          {isLoading ? (
+            <TeacherScheduleSkeleton count={3} isDark={isDark} />
+          ) : todaySchedules.length === 0 ? (
+            /* 2. EMPTY STATE (When not loading and no schedules) */
             <View style={styles.scheduleEmptyState}>
-              <View style={[styles.scheduleEmptyIcon, { backgroundColor: isDark ? 'rgba(79,70,229,0.12)' : '#EEF2FF' }]}>
+              <View
+                style={[
+                  styles.scheduleEmptyIcon,
+                  {
+                    backgroundColor: isDark
+                      ? 'rgba(79,70,229,0.12)'
+                      : '#EEF2FF',
+                  },
+                ]}
+              >
                 <Ionicons name="calendar-outline" size={28} color="#6366F1" />
               </View>
-              <Text style={[styles.scheduleEmptyTitle, { color: theme.textPrimary }]}>
+              <Text
+                style={[
+                  styles.scheduleEmptyTitle,
+                  { color: theme.textPrimary },
+                ]}
+              >
                 Tidak Ada Jadwal Hari Ini
               </Text>
-              <Text style={[styles.scheduleEmptyDesc, { color: theme.textMuted }]}>
-                {isLoading ? 'Memuat jadwal...' : 'Selamat beristirahat. Tidak ada sesi KBM yang terjadwal untuk hari ini.'}
+              <Text
+                style={[styles.scheduleEmptyDesc, { color: theme.textMuted }]}
+              >
+                Selamat beristirahat. Tidak ada sesi KBM yang terjadwal untuk hari ini.
               </Text>
             </View>
-          )}
+          ) : (
+            /* 3. LIVE SCHEDULE ITEMS */
+            <>
+              {/* Vertical Connecting Line */}
+              <View
+                style={[
+                  styles.timelineTrackLine,
+                  {
+                    backgroundColor: isDark
+                      ? 'rgba(255, 255, 255, 0.12)'
+                      : '#E2E8F0',
+                  },
+                ]}
+              />
 
-          {todaySchedules.map((sch, index) => {
+              {todaySchedules.map((sch, index) => {
             const isLast = index === todaySchedules.length - 1;
             const nodeColor =
               sch.type === 'ekskul'
@@ -651,7 +662,16 @@ export default function GuruDashboardView({
                   ) : sch.type === 'infal' ? (
                     <Ionicons name="swap-horizontal" size={14} color="#FFFFFF" />
                   ) : (
-                    <Text style={styles.timelineNodeText}>{sch.periodNumber}</Text>
+                    <Text
+                      style={[
+                        styles.timelineNodeText,
+                        String(sch.periodDisplay || sch.periodNumber).length > 2 && {
+                          fontSize: 9.5,
+                        },
+                      ]}
+                    >
+                      {sch.periodDisplay || sch.periodNumber}
+                    </Text>
                   )}
                 </View>
 
@@ -860,6 +880,8 @@ export default function GuruDashboardView({
               </View>
             );
           })}
+            </>
+          )}
         </View>
 
         {/* Footer Link: Jadwal Lengkap */}
@@ -884,7 +906,7 @@ export default function GuruDashboardView({
       {/* 4. TUGAS SISWA PERLU DINILAI */}
       <View style={styles.sectionHeaderRow}>
         <Text style={[styles.sectionHeading, { color: theme.textMuted }]}>
-          TUGAS MENUNGGU REVIEW (8)
+          TUGAS MENUNGGU REVIEW{pendingTasks.length > 0 ? ` (${pendingTasks.length})` : ''}
         </Text>
         <TouchableOpacity
           onPress={() => Alert.alert('Review Tugas', 'Membuka seluruh antrean koreksi tugas...')}
@@ -901,37 +923,53 @@ export default function GuruDashboardView({
           { backgroundColor: theme.surface, borderColor: theme.border },
         ]}
       >
-        {pendingTasks.map((t, index) => (
-          <View key={t.id}>
-            <View style={styles.taskItemRow}>
-              <View style={[styles.taskAvatarCircle, { backgroundColor: theme.surfaceMuted }]}>
-                <Text style={[styles.taskAvatarText, { color: theme.textPrimary }]}>
-                  {t.studentName[0]}
-                </Text>
-              </View>
-              <View style={styles.taskMeta}>
-                <Text style={[styles.taskStudentName, { color: theme.textPrimary }]}>
-                  {t.studentName}
-                </Text>
-                <Text style={[styles.taskTitle, { color: theme.textMuted }]}>
-                  {t.title} • {t.class}
-                </Text>
-              </View>
-              <TouchableOpacity
-                style={[styles.scoreBtn, { backgroundColor: theme.primary }]}
-                onPress={() => {
-                  setSelectedTask(t);
-                  setShowReviewModal(true);
-                }}
-              >
-                <Text style={styles.scoreBtnText}>Beri Nilai</Text>
-              </TouchableOpacity>
-            </View>
-            {index < pendingTasks.length - 1 && (
-              <View style={[styles.taskDivider, { backgroundColor: theme.border }]} />
-            )}
+        {isLoading ? (
+          <View style={{ padding: 16, alignItems: 'center' }}>
+            <Text style={[{ color: theme.textMuted, fontSize: 13 }]}>Memuat data tugas...</Text>
           </View>
-        ))}
+        ) : pendingTasks.length === 0 ? (
+          <View style={{ paddingVertical: 20, alignItems: 'center', gap: 6 }}>
+            <Ionicons name="checkmark-circle-outline" size={32} color="#10B981" />
+            <Text style={{ color: theme.textPrimary, fontWeight: '700', fontSize: 13 }}>
+              Tidak Ada Tugas Menunggu
+            </Text>
+            <Text style={{ color: theme.textMuted, fontSize: 12, textAlign: 'center' }}>
+              Semua tugas siswa sudah dinilai.
+            </Text>
+          </View>
+        ) : (
+          pendingTasks.map((t, index) => (
+            <View key={t.id}>
+              <View style={styles.taskItemRow}>
+                <View style={[styles.taskAvatarCircle, { backgroundColor: theme.surfaceMuted }]}>
+                  <Text style={[styles.taskAvatarText, { color: theme.textPrimary }]}>
+                    {(t.studentName || 'S')[0].toUpperCase()}
+                  </Text>
+                </View>
+                <View style={styles.taskMeta}>
+                  <Text style={[styles.taskStudentName, { color: theme.textPrimary }]}>
+                    {t.studentName || 'Siswa'}
+                  </Text>
+                  <Text style={[styles.taskTitle, { color: theme.textMuted }]} numberOfLines={1}>
+                    {t.title || 'Tugas'} • {t.class || t.submittedAt || ''}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={[styles.scoreBtn, { backgroundColor: theme.primary }]}
+                  onPress={() => {
+                    setSelectedTask(t);
+                    setShowReviewModal(true);
+                  }}
+                >
+                  <Text style={styles.scoreBtnText}>Beri Nilai</Text>
+                </TouchableOpacity>
+              </View>
+              {index < pendingTasks.length - 1 && (
+                <View style={[styles.taskDivider, { backgroundColor: theme.border }]} />
+              )}
+            </View>
+          ))
+        )}
       </View>
 
       {/* 5. KURSUS & MODUL AJAR */}
@@ -1098,7 +1136,7 @@ export default function GuruDashboardView({
             <Ionicons name="sparkles" size={20} color="#7C3AED" />
           </View>
           <Text style={[styles.toolTitle, { color: theme.textPrimary }]}>AI Generator</Text>
-          <Text style={[styles.toolDesc, { color: theme.textMuted }]}>Bikin soal otomatis</Text>
+          <Text style={[styles.toolDesc, { color: theme.textMuted }]}>Buka di Web Portal</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -1146,7 +1184,13 @@ export default function GuruDashboardView({
             styles.toolItem,
             { backgroundColor: theme.surface, borderColor: theme.border },
           ]}
-          onPress={() => Alert.alert('Jurnal Mengajar', 'Catatan KBM harian tersimpan otomatis.')}
+          onPress={() => {
+            if (onNavigateToAttendance) {
+              onNavigateToAttendance({ excludeSession: true });
+            } else {
+              Alert.alert('Jurnal Guru', 'Catatan KBM harian tersimpan otomatis.');
+            }
+          }}
         >
           <View style={[styles.toolIconBox, { backgroundColor: theme.surfaceMuted }]}>
             <Ionicons name="create-outline" size={20} color="#4F46E5" />
@@ -1156,7 +1200,7 @@ export default function GuruDashboardView({
         </TouchableOpacity>
       </View>
 
-      {/* MODAL: AI SOAL GENERATOR */}
+      {/* MODAL: AI GENERATOR JURNAL & KBM (POPUP BUKA DI WEB) */}
       <Modal
         visible={showAiGeneratorModal}
         animationType="slide"
@@ -1167,59 +1211,154 @@ export default function GuruDashboardView({
           <View style={[styles.modalSheet, { backgroundColor: theme.surface }]}>
             <View style={styles.modalSheetHeader}>
               <View style={styles.modalTitleRow}>
-                <Ionicons name="sparkles" size={20} color="#7C3AED" />
+                <View
+                  style={[
+                    styles.aiBadgeIconCircle,
+                    {
+                      backgroundColor: isDark
+                        ? 'rgba(124, 58, 237, 0.2)'
+                        : '#EDE9FE',
+                    },
+                  ]}
+                >
+                  <Ionicons name="sparkles" size={17} color="#7C3AED" />
+                </View>
                 <Text style={[styles.modalSheetTitle, { color: theme.textPrimary }]}>
-                  AI Generator Soal KBM
+                  AI Generator Jurnal Guru
                 </Text>
               </View>
               <TouchableOpacity
                 style={[styles.closeIconWrap, { backgroundColor: theme.surfaceMuted }]}
                 onPress={() => setShowAiGeneratorModal(false)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
                 <Ionicons name="close" size={18} color={theme.textPrimary} />
               </TouchableOpacity>
             </View>
 
-            <Text style={[styles.modalDescText, { color: theme.textSecondary }]}>
-              Buat paket soal kuis atau ulangan harian otomatis berdasarkan topik kurikulum dengan bantuan AI PedaGogi.
-            </Text>
-
-            <View style={styles.generatorBox}>
-              <Text style={[styles.generatorPresetLabel, { color: theme.textMuted }]}>
-                PILIH PRESET KELAS & MATERI:
-              </Text>
-              <TouchableOpacity
-                style={[styles.presetOption, { backgroundColor: theme.surfaceMuted }]}
-                onPress={() => {
-                  setShowAiGeneratorModal(false);
-                  Alert.alert('AI Sukses', 'Berhasil membuat 10 soal Pilihan Ganda & Kunci Jawaban materi "Algoritma Python".');
-                }}
-              >
-                <Ionicons name="flash-outline" size={16} color="#7C3AED" />
-                <Text style={[styles.presetOptionText, { color: theme.textPrimary }]}>
-                  10 Soal: Informatika XII (Percabangan & Looping)
+            {/* Web Callout Info Card */}
+            <View
+              style={[
+                styles.webCalloutBox,
+                {
+                  backgroundColor: isDark ? 'rgba(79, 70, 229, 0.12)' : '#EEF2FF',
+                  borderColor: isDark ? 'rgba(99, 102, 241, 0.3)' : '#C7D2FE',
+                },
+              ]}
+            >
+              <View style={styles.webCalloutHeader}>
+                <Ionicons name="desktop-outline" size={18} color="#4F46E5" />
+                <Text
+                  style={[
+                    styles.webCalloutBadgeText,
+                    { color: isDark ? '#A5B4FC' : '#4338CA' },
+                  ]}
+                >
+                  Tersedia di Web Portal Desktop
                 </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.presetOption, { backgroundColor: theme.surfaceMuted }]}
-                onPress={() => {
-                  setShowAiGeneratorModal(false);
-                  Alert.alert('AI Sukses', 'Berhasil membuat 5 soal Esai Analisis materi "Energi Mekanik".');
-                }}
+              </View>
+              <Text style={[styles.webCalloutTitle, { color: theme.textPrimary }]}>
+                Buka di Web Browser untuk Menjalankan
+              </Text>
+              <Text
+                style={[styles.webCalloutDesc, { color: theme.textSecondary }]}
               >
-                <Ionicons name="flash-outline" size={16} color="#7C3AED" />
-                <Text style={[styles.presetOptionText, { color: theme.textPrimary }]}>
-                  5 Soal Esai: Fisika XII (Hukum Kekekalan Energi)
+                Fitur AI Generator Jurnal Mengajar, Penyusunan Modul Ajar, ATP, dan Pembuat Soal Otomatis dirancang khusus dijalankan melalui Web Portal PedaGogiAI di laptop / PC untuk kenyamanan kustomisasi prompt, editing tabel capaian, serta ekspor berkas format Word & PDF.
+              </Text>
+            </View>
+
+            {/* Feature Highlights */}
+            <View style={styles.featureHighlightsList}>
+              <View style={styles.featureItemRow}>
+                <Ionicons name="checkmark-circle" size={15} color="#10B981" />
+                <Text
+                  style={[styles.featureItemText, { color: theme.textPrimary }]}
+                >
+                  <Text style={{ fontWeight: '700' }}>AI Jurnal KBM:</Text> Ringkasan materi & refleksi otomatis
+                </Text>
+              </View>
+              <View style={styles.featureItemRow}>
+                <Ionicons name="checkmark-circle" size={15} color="#10B981" />
+                <Text
+                  style={[styles.featureItemText, { color: theme.textPrimary }]}
+                >
+                  <Text style={{ fontWeight: '700' }}>Modul Ajar & ATP:</Text> Perangkat ajar Kurikulum Merdeka
+                </Text>
+              </View>
+              <View style={styles.featureItemRow}>
+                <Ionicons name="checkmark-circle" size={15} color="#10B981" />
+                <Text
+                  style={[styles.featureItemText, { color: theme.textPrimary }]}
+                >
+                  <Text style={{ fontWeight: '700' }}>Bank Soal & Rubrik:</Text> Soal PG, Esai HOTS, & Kunci Jawaban
+                </Text>
+              </View>
+              <View style={styles.featureItemRow}>
+                <Ionicons name="checkmark-circle" size={15} color="#10B981" />
+                <Text
+                  style={[styles.featureItemText, { color: theme.textPrimary }]}
+                >
+                  <Text style={{ fontWeight: '700' }}>Ekspor Dokumen:</Text> Unduh berkas format DOCX & PDF
+                </Text>
+              </View>
+            </View>
+
+            {/* Web URL Info Box */}
+            <View
+              style={[
+                styles.webUrlBox,
+                {
+                  backgroundColor: theme.surfaceMuted,
+                  borderColor: theme.border,
+                },
+              ]}
+            >
+              <Ionicons name="globe-outline" size={14} color={theme.textMuted} />
+              <Text
+                style={[styles.webUrlText, { color: theme.textMuted }]}
+                numberOfLines={1}
+              >
+                {CONFIG.API_BASE_URL.replace(/\/api\/?$/, '')}
+              </Text>
+            </View>
+
+            {/* Action Buttons */}
+            <View style={styles.aiModalBtnRow}>
+              <TouchableOpacity
+                style={[styles.openWebBtn, { backgroundColor: '#4F46E5' }]}
+                onPress={() => {
+                  const webUrl = CONFIG.API_BASE_URL.replace(/\/api\/?$/, '');
+                  Linking.openURL(webUrl).catch(() => {
+                    Alert.alert(
+                      'Buka Web',
+                      'Silakan buka browser di laptop/PC Anda: ' + webUrl
+                    );
+                  });
+                }}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="open-outline" size={15} color="#FFFFFF" />
+                <Text style={styles.openWebBtnText}>Buka Web Portal</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.closeModalBtn,
+                  {
+                    backgroundColor: theme.surfaceMuted,
+                    borderColor: theme.border,
+                  },
+                ]}
+                onPress={() => setShowAiGeneratorModal(false)}
+                activeOpacity={0.8}
+              >
+                <Text
+                  style={[styles.closeModalBtnText, { color: theme.textPrimary }]}
+                >
+                  Tutup
                 </Text>
               </TouchableOpacity>
             </View>
-
-            <AppButton
-              title="Tutup"
-              variant="outline"
-              onPress={() => setShowAiGeneratorModal(false)}
-              style={{ marginTop: 12, marginBottom: 20 }}
-            />
           </View>
         </View>
       </Modal>
@@ -2206,26 +2345,106 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginBottom: 16,
   },
-  generatorBox: {
-    gap: 10,
+  aiBadgeIconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  webCalloutBox: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 14,
     marginBottom: 14,
   },
-  generatorPresetLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.6,
+  webCalloutHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
   },
-  presetOption: {
+  webCalloutBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  webCalloutTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    marginBottom: 6,
+    letterSpacing: -0.2,
+  },
+  webCalloutDesc: {
+    fontSize: 12,
+    lineHeight: 17,
+  },
+  featureHighlightsList: {
+    gap: 8,
+    marginBottom: 14,
+    paddingHorizontal: 2,
+  },
+  featureItemRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    padding: 12,
-    borderRadius: 12,
   },
-  presetOptionText: {
+  featureItemText: {
     fontSize: 12,
+    lineHeight: 16,
+    flex: 1,
+  },
+  webUrlBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    marginBottom: 14,
+  },
+  webUrlText: {
+    fontSize: 11.5,
     fontWeight: '600',
     flex: 1,
+  },
+  aiModalBtnRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 14,
+  },
+  openWebBtn: {
+    flex: 1.8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 12,
+    gap: 6,
+    shadowColor: '#4F46E5',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  openWebBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  closeModalBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  closeModalBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
   },
   scoreRow: {
     flexDirection: 'row',

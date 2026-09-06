@@ -2,12 +2,14 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { authApi } from '../api/authApi';
 import { CONFIG } from '../config';
 import { appStorage } from '../utils/storage';
+import { biometricService } from '../services/biometricService';
 
 const AuthContext = createContext({
   user: null,
   isAuthenticated: false,
   isLoading: false,
   login: async () => {},
+  loginWithBiometrics: async () => {},
   register: async () => {},
   logout: async () => {},
 });
@@ -73,6 +75,23 @@ export const AuthProvider = ({ children }) => {
         );
 
         setUser(userData);
+
+        // Store credentials for biometrics if rememberMe is enabled or biometrics is already on
+        try {
+          const isBio = await biometricService.isBiometricEnabled();
+          if (rememberMe || isBio) {
+            await biometricService.saveBiometricCredentials({
+              email,
+              password,
+              token,
+              user: userData,
+              savedAt: new Date().toISOString(),
+            });
+          }
+        } catch (bioErr) {
+          console.log('[AuthContext] Bio creds save warning:', bioErr?.message);
+        }
+
         return { success: true, user: userData, message: res.message };
       }
 
@@ -87,6 +106,70 @@ export const AuthProvider = ({ children }) => {
         message:
           error?.message ||
           'Terjadi kesalahan saat menghubungi server. Pastikan server Laravel aktif.',
+      };
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loginWithBiometrics = async () => {
+    setIsLoading(true);
+    try {
+      const creds = await biometricService.getBiometricCredentials();
+      if (!creds) {
+        return {
+          success: false,
+          message: 'Belum ada akun tersimpan untuk biometrik. Masuk manual terlebih dahulu.',
+        };
+      }
+
+      // First try existing auth token
+      if (creds.token) {
+        try {
+          const profileRes = await authApi.getProfile(creds.token);
+          if (profileRes?.data?.user) {
+            const user = profileRes.data.user;
+            await appStorage.setItem(CONFIG.STORAGE_KEYS.AUTH_TOKEN, creds.token);
+            await appStorage.setItem(CONFIG.STORAGE_KEYS.USER_DATA, JSON.stringify(user));
+            setUser(user);
+            return { success: true, user, message: 'Berhasil masuk dengan Biometrik!' };
+          }
+        } catch (tokenErr) {
+          console.log('[AuthContext] Saved token invalid, re-authenticating with credentials...');
+        }
+      }
+
+      // Fallback: re-authenticate with stored credentials
+      if (creds.email && creds.password) {
+        const loginRes = await authApi.login({ email: creds.email, password: creds.password });
+        if (loginRes.success && loginRes.data?.token) {
+          const token = loginRes.data.token;
+          const userData = loginRes.data.user;
+
+          await appStorage.setItem(CONFIG.STORAGE_KEYS.AUTH_TOKEN, token);
+          await appStorage.setItem(CONFIG.STORAGE_KEYS.USER_DATA, JSON.stringify(userData));
+
+          await biometricService.saveBiometricCredentials({
+            ...creds,
+            token,
+            user: userData,
+            savedAt: new Date().toISOString(),
+          });
+
+          setUser(userData);
+          return { success: true, user: userData, message: 'Berhasil masuk dengan Biometrik!' };
+        }
+      }
+
+      return {
+        success: false,
+        message: 'Kredensial biometrik kedaluwarsa. Silakan masukkan kata sandi Anda.',
+      };
+    } catch (err) {
+      console.warn('[AuthContext] loginWithBiometrics error:', err);
+      return {
+        success: false,
+        message: err?.message || 'Gagal login dengan biometrik.',
       };
     } finally {
       setIsLoading(false);
@@ -149,6 +232,7 @@ export const AuthProvider = ({ children }) => {
         isAuthenticated: !!user,
         isLoading,
         login,
+        loginWithBiometrics,
         register,
         logout,
       }}

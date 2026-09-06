@@ -22,7 +22,7 @@ const getDetectedHostIp = () => {
 
   // Fallback to local machine WiFi IP or emulator gateway
   if (Platform.OS === 'android') {
-    return '192.168.1.13';
+    return '192.168.1.183';
   }
   return 'localhost';
 };
@@ -39,11 +39,13 @@ export const CONFIG = {
   APP_NAME: 'PedaGogiAI',
   APP_VERSION: '1.0.0',
   API_BASE_URL: resolveApiBaseUrl(),
-  FALLBACK_URL: 'http://192.168.1.13:8000/api',
+  FALLBACK_URL: 'http://192.168.1.183:8000/api',
   STORAGE_KEYS: {
     AUTH_TOKEN: '@pedagogiai_auth_token',
     USER_DATA: '@pedagogiai_user_data',
     THEME_MODE: '@pedagogiai_theme_mode',
+    BIOMETRIC_ENABLED: '@pedagogiai_biometric_enabled',
+    BIOMETRIC_SAVED_CREDS: '@pedagogiai_biometric_saved_creds',
   },
   TIMEOUT: 5000,
 };

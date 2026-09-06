@@ -32,6 +32,8 @@ import QuizResultScreen from '../screens/course/QuizResultScreen';
 import AttendanceJournalScreen from '../screens/attendance/AttendanceJournalScreen';
 import EkskulAttendanceScreen from '../screens/ekskul/EkskulAttendanceScreen';
 import LocationAttendanceScreen from '../screens/attendance/LocationAttendanceScreen';
+import NotificationScreen from '../screens/notification/NotificationScreen';
+import NotificationDetailScreen from '../screens/notification/NotificationDetailScreen';
 
 function AnimatedScreenContainer({ routeKey, children }) {
   const fadeAnim = useRef(new Animated.Value(0.15)).current;
@@ -82,6 +84,7 @@ export default function RootNavigator() {
   const [selectedQuiz, setSelectedQuiz] = useState(null);
   const [selectedQuizResult, setSelectedQuizResult] = useState(null);
   const [selectedSchedule, setSelectedSchedule] = useState(null);
+  const [selectedNotification, setSelectedNotification] = useState(null);
 
   // Strictly enforce authentication navigation state
   useEffect(() => {
@@ -107,10 +110,7 @@ export default function RootNavigator() {
   }, [isAuthenticated]);
 
   const handleNotificationPress = () => {
-    Alert.alert(
-      'Notifikasi PedaGogiAI',
-      '• E-Kantin Terpadu: Stan Kantin Mbok Darmi, Dapur Sehat, & Depot Es aktif menerima pesanan nontunai.\n• Saldo Dompet Digital Anda siap digunakan.'
-    );
+    setCurrentRoute(ROUTES.MAIN.NOTIFICATIONS);
   };
 
   const isAuthScreen =
@@ -124,6 +124,8 @@ export default function RootNavigator() {
     currentRoute === ROUTES.MAIN.QUIZ_ATTEMPT ||
     currentRoute === ROUTES.MAIN.QUIZ_RESULT ||
     currentRoute === ROUTES.MAIN.ATTENDANCE ||
+    currentRoute === ROUTES.MAIN.NOTIFICATIONS ||
+    currentRoute === ROUTES.MAIN.NOTIFICATION_DETAIL ||
     currentRoute === ROUTES.MAIN.EKSKUL_ATTENDANCE ||
     currentRoute === ROUTES.MAIN.LOCATION_ATTENDANCE;
 
@@ -269,7 +271,10 @@ export default function RootNavigator() {
       case ROUTES.MAIN.ATTENDANCE:
         return (
           <AttendanceJournalScreen
-            onBack={() => setCurrentRoute(ROUTES.MAIN.DASHBOARD)}
+            onBack={() => {
+              setSelectedSchedule(null);
+              setCurrentRoute(ROUTES.MAIN.DASHBOARD);
+            }}
             schedule={selectedSchedule}
           />
         );
@@ -284,6 +289,23 @@ export default function RootNavigator() {
         return (
           <LocationAttendanceScreen
             onBack={() => setCurrentRoute(ROUTES.MAIN.DASHBOARD)}
+          />
+        );
+      case ROUTES.MAIN.NOTIFICATIONS:
+        return (
+          <NotificationScreen
+            onBack={() => setCurrentRoute(ROUTES.MAIN.DASHBOARD)}
+            onOpenDetail={(notif) => {
+              setSelectedNotification(notif);
+              setCurrentRoute(ROUTES.MAIN.NOTIFICATION_DETAIL);
+            }}
+          />
+        );
+      case ROUTES.MAIN.NOTIFICATION_DETAIL:
+        return (
+          <NotificationDetailScreen
+            notification={selectedNotification}
+            onBack={() => setCurrentRoute(ROUTES.MAIN.NOTIFICATIONS)}
           />
         );
       case ROUTES.MAIN.DASHBOARD:

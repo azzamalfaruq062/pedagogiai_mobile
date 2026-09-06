@@ -9,6 +9,10 @@ import {
   ScrollView,
   Dimensions,
   Animated,
+  TextInput,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -111,28 +115,41 @@ export default function AdminDashboardView({
   const [showBroadcastModal, setShowBroadcastModal] = useState(false);
   const [showAuditModal, setShowAuditModal] = useState(false);
   const [dashboardData, setDashboardData] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Broadcast Form State
+  const [broadcastTitle, setBroadcastTitle] = useState('');
+  const [broadcastMessage, setBroadcastMessage] = useState('');
+  const [broadcastTarget, setBroadcastTarget] = useState('all_users'); // all_users, all_guru, all_siswa
+  const [broadcastChannel, setBroadcastChannel] = useState('app'); // app, wa, all
+  const [isSendingBroadcast, setIsSendingBroadcast] = useState(false);
+
+  const loadSummary = async () => {
+    try {
+      setIsLoading(true);
+      const res = await dashboardApi.getSummary();
+      if (res?.success && res.data) {
+        setDashboardData(res.data);
+      }
+    } catch (err) {
+      console.log('Error loading admin summary:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    async function load() {
-      try {
-        const res = await dashboardApi.getSummary();
-        if (res?.success && res.data) {
-          setDashboardData(res.data);
-        }
-      } catch (err) {
-        console.log('Error loading admin summary:', err);
-      }
-    }
-    load();
+    loadSummary();
   }, []);
 
   const stats = dashboardData?.stats || {};
+  const academicInfo = dashboardData?.academicInfo || 'Jadwal Master Aktif: Semester Genap • Status Server Normal';
 
   const adminStats = [
     {
       label: 'TOTAL SISWA',
-      value: String(stats.studentsCount ?? '1.120'),
-      sub: 'Terdaftar Aktif',
+      value: String(stats.studentsCount ?? stats.totalSiswa ?? 0),
+      sub: `${stats.classroomsCount ?? 0} Kelas Rombel`,
       icon: 'people',
       color: '#4F46E5',
       lightTint: 'rgba(79, 70, 229, 0.07)',
@@ -140,8 +157,8 @@ export default function AdminDashboardView({
     },
     {
       label: 'GURU & STAF',
-      value: String((stats.teachersCount || 0) + (stats.staffCount || 0) || '68'),
-      sub: 'Pengajar & Tendik',
+      value: String((stats.teachersCount ?? stats.totalGuru ?? 0) + (stats.staffCount ?? stats.totalStaff ?? 0)),
+      sub: `${stats.teachersCount ?? stats.totalGuru ?? 0} Guru • ${stats.staffCount ?? stats.totalStaff ?? 0} Tendik`,
       icon: 'school',
       color: '#10B981',
       lightTint: 'rgba(16, 185, 129, 0.07)',
@@ -149,7 +166,7 @@ export default function AdminDashboardView({
     },
     {
       label: 'KURSUS & MODUL',
-      value: String(stats.coursesCount ?? '4'),
+      value: String(stats.coursesCount ?? stats.totalCourses ?? 0),
       sub: 'Materi KBM Aktif',
       icon: 'library',
       color: '#F59E0B',
@@ -158,7 +175,7 @@ export default function AdminDashboardView({
     },
     {
       label: 'TOTAL PENGGUNA',
-      value: String(stats.totalUsers ?? '1.188'),
+      value: String(stats.totalUsers ?? 0),
       sub: 'Akun Terdaftar',
       icon: 'shield-checkmark',
       color: '#8B5CF6',
@@ -195,18 +212,56 @@ export default function AdminDashboardView({
     {
       id: 'ctrl_4',
       title: 'Broadcast Pengumuman',
-      desc: 'Kirim notif ke seluruh user',
+      desc: `${stats.totalBroadcasts || 0} Pengumuman Terkirim`,
       icon: 'megaphone-outline',
       color: '#8B5CF6',
       action: () => setShowBroadcastModal(true),
     },
   ];
 
-  const recentAuditLogs = [
-    { id: 'log_1', text: 'Top-up saldo siswa via QRIS Midtrans (Rp 50.000)', time: '09:42 WIB', tag: 'Kantin' },
-    { id: 'log_2', text: 'Guru Bpk. Hendra menginput ledger nilai XII MIPA 2', time: '09:15 WIB', tag: 'Akademik' },
-    { id: 'log_3', text: 'Pencetakan smart card siswa baru (NISN 0087429110)', time: '08:50 WIB', tag: 'TU' },
-  ];
+  const recentAuditLogs = dashboardData?.auditLogs?.length
+    ? dashboardData.auditLogs
+    : [
+        { id: 'log_1', text: 'Sistem PedaGogiAI terhubung dengan database', time: 'Baru saja', tag: 'Sistem' },
+      ];
+
+  const handleSendBroadcast = async () => {
+    if (!broadcastTitle.trim()) {
+      Alert.alert('Perhatian', 'Harap masukkan judul pengumuman.');
+      return;
+    }
+    if (!broadcastMessage.trim()) {
+      Alert.alert('Perhatian', 'Harap masukkan isi pesan pengumuman.');
+      return;
+    }
+
+    try {
+      setIsSendingBroadcast(true);
+      const res = await dashboardApi.sendBroadcast({
+        title: broadcastTitle.trim(),
+        message: broadcastMessage.trim(),
+        target_type: broadcastTarget,
+        channel: broadcastChannel,
+      });
+
+      if (res?.success) {
+        Alert.alert(
+          'Siaran Terkirim! 🎉',
+          res.message || 'Pengumuman sekolah berhasil disiarkan ke seluruh pengguna aktif.'
+        );
+        setShowBroadcastModal(false);
+        setBroadcastTitle('');
+        setBroadcastMessage('');
+        loadSummary();
+      } else {
+        Alert.alert('Gagal Mengirim', res?.message || 'Gagal menyiarkan pengumuman.');
+      }
+    } catch (err) {
+      Alert.alert('Error', err?.message || 'Terjadi gangguan saat menyiarkan pengumuman.');
+    } finally {
+      setIsSendingBroadcast(false);
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -267,7 +322,7 @@ export default function AdminDashboardView({
                         </View>
                         <Text style={styles.heroGreeting}>Administrator Sistem</Text>
                         <Text style={styles.heroSub}>
-                          Jadwal Master Aktif: Semester Genap • Status Server Normal
+                          {academicInfo}
                         </Text>
                       </View>
 
@@ -499,17 +554,17 @@ export default function AdminDashboardView({
         <View style={styles.healthMetricsRow}>
           <View style={[styles.healthMetricPill, { backgroundColor: theme.surfaceMuted }]}>
             <Text style={[styles.healthMetricText, { color: theme.textPrimary }]}>
-              CPU: 18%
+              CPU: {stats.cpuUsage || '12%'}
             </Text>
           </View>
           <View style={[styles.healthMetricPill, { backgroundColor: theme.surfaceMuted }]}>
             <Text style={[styles.healthMetricText, { color: theme.textPrimary }]}>
-              Memory: 2.4 GB / 8 GB
+              Memory: {stats.memoryUsage || '26 MB'}
             </Text>
           </View>
           <View style={[styles.healthMetricPill, { backgroundColor: theme.surfaceMuted }]}>
             <Text style={[styles.healthMetricText, { color: theme.textPrimary }]}>
-              Database: Sinkron
+              DB: {stats.databaseStatus || 'Sinkron'}
             </Text>
           </View>
         </View>
@@ -518,11 +573,11 @@ export default function AdminDashboardView({
       {/* 5. RECENT AUDIT LOGS */}
       <View style={styles.sectionHeaderRow}>
         <Text style={[styles.sectionHeading, { color: theme.textMuted }]}>
-          LOG AKTIVITAS TERAKHIR
+          LOG AKTIVITAS TERAKHIR (REALTIME)
         </Text>
         <TouchableOpacity onPress={() => setShowAuditModal(true)}>
           <Text style={[styles.seeAllLink, { color: theme.primary }]}>
-            Semua Log →
+            Semua Log ({recentAuditLogs.length}) →
           </Text>
         </TouchableOpacity>
       </View>
@@ -533,11 +588,20 @@ export default function AdminDashboardView({
           { backgroundColor: theme.surface, borderColor: theme.border },
         ]}
       >
-        {recentAuditLogs.map((log, idx) => (
-          <View key={log.id}>
+        {recentAuditLogs.slice(0, 5).map((log, idx) => (
+          <View key={log.id || idx}>
             <View style={styles.logRow}>
-              <View style={[styles.logIconBox, { backgroundColor: theme.surfaceMuted }]}>
-                <Ionicons name="time-outline" size={15} color={theme.textSecondary} />
+              <View
+                style={[
+                  styles.logIconBox,
+                  { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(79, 70, 229, 0.08)' },
+                ]}
+              >
+                <Ionicons
+                  name={log.icon || 'time-outline'}
+                  size={15}
+                  color={log.color || theme.primary}
+                />
               </View>
               <View style={styles.logTextCol}>
                 <Text style={[styles.logText, { color: theme.textPrimary }]} numberOfLines={2}>
@@ -545,31 +609,54 @@ export default function AdminDashboardView({
                 </Text>
                 <View style={styles.logMetaRow}>
                   <Text style={[styles.logTime, { color: theme.textMuted }]}>{log.time}</Text>
-                  <View style={[styles.logTag, { backgroundColor: theme.surfaceMuted }]}>
-                    <Text style={[styles.logTagText, { color: theme.textPrimary }]}>{log.tag}</Text>
+                  <View
+                    style={[
+                      styles.logTag,
+                      {
+                        backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.05)',
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.logTagText, { color: log.color || theme.textPrimary }]}>
+                      {log.tag}
+                    </Text>
                   </View>
                 </View>
               </View>
             </View>
-            {idx < recentAuditLogs.length - 1 && (
+            {idx < Math.min(recentAuditLogs.length, 5) - 1 && (
               <View style={[styles.logDivider, { backgroundColor: theme.border }]} />
             )}
           </View>
         ))}
       </View>
 
-      {/* MODAL: BROADCAST */}
+      {/* MODAL: BROADCAST PENGUMUMAN FORM */}
       <Modal
         visible={showBroadcastModal}
         animationType="slide"
         transparent
         onRequestClose={() => setShowBroadcastModal(false)}
       >
-        <View style={styles.modalBackdrop}>
-          <View style={[styles.modalSheet, { backgroundColor: theme.surface }]}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.modalBackdrop}
+        >
+          <View style={[styles.modalSheet, { backgroundColor: theme.surface, maxHeight: '90%' }]}>
             <View style={styles.modalSheetHeader}>
               <View style={styles.modalTitleRow}>
-                <Ionicons name="megaphone" size={20} color="#0B3592" />
+                <View
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 16,
+                    backgroundColor: 'rgba(79, 70, 229, 0.12)',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Ionicons name="megaphone" size={18} color="#4F46E5" />
+                </View>
                 <Text style={[styles.modalSheetTitle, { color: theme.textPrimary }]}>
                   Broadcast Pengumuman
                 </Text>
@@ -582,21 +669,169 @@ export default function AdminDashboardView({
               </TouchableOpacity>
             </View>
 
-            <Text style={[styles.modalDescText, { color: theme.textSecondary }]}>
-              Kirim pengumuman massal yang akan muncul di perangkat seluruh siswa, guru, dan staf sekolah.
-            </Text>
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+              <Text style={[styles.modalDescText, { color: theme.textSecondary }]}>
+                Siarkan pengumuman sekolah langsung ke seluruh gawai siswa, guru, dan staf melalui Beranda aplikasi & kanal notifikasi.
+              </Text>
 
-            <AppButton
-              title="Kirim Notifikasi Sekolah"
-              icon="send-outline"
-              onPress={() => {
-                setShowBroadcastModal(false);
-                Alert.alert('Sukses', 'Pengumuman sekolah berhasil disiarkan ke 1.188 pengguna aktif.');
-              }}
-              style={{ marginTop: 12, marginBottom: 20 }}
-            />
+              {/* Target Penerima */}
+              <Text style={[styles.formFieldLabel, { color: theme.textPrimary }]}>
+                Target Penerima
+              </Text>
+              <View style={styles.targetPillRow}>
+                {[
+                  { key: 'all_users', label: 'Semua Pengguna' },
+                  { key: 'all_guru', label: 'Khusus Guru' },
+                  { key: 'all_siswa', label: 'Khusus Siswa' },
+                ].map((t) => {
+                  const isSelected = broadcastTarget === t.key;
+                  return (
+                    <TouchableOpacity
+                      key={t.key}
+                      onPress={() => setBroadcastTarget(t.key)}
+                      style={[
+                        styles.targetPill,
+                        {
+                          backgroundColor: isSelected
+                            ? '#4F46E5'
+                            : isDark
+                            ? 'rgba(255,255,255,0.06)'
+                            : '#F1F5F9',
+                          borderColor: isSelected ? '#4F46E5' : theme.border,
+                        },
+                      ]}
+                      activeOpacity={0.8}
+                    >
+                      <Text
+                        style={[
+                          styles.targetPillText,
+                          { color: isSelected ? '#FFFFFF' : theme.textSecondary },
+                        ]}
+                      >
+                        {t.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {/* Kanal Siaran */}
+              <Text style={[styles.formFieldLabel, { color: theme.textPrimary }]}>
+                Kanal Distribusi
+              </Text>
+              <View style={styles.targetPillRow}>
+                {[
+                  { key: 'app', label: 'Aplikasi & Feed' },
+                  { key: 'wa', label: 'WhatsApp' },
+                  { key: 'all', label: 'Semua Kanal' },
+                ].map((c) => {
+                  const isSelected = broadcastChannel === c.key;
+                  return (
+                    <TouchableOpacity
+                      key={c.key}
+                      onPress={() => setBroadcastChannel(c.key)}
+                      style={[
+                        styles.targetPill,
+                        {
+                          backgroundColor: isSelected
+                            ? '#10B981'
+                            : isDark
+                            ? 'rgba(255,255,255,0.06)'
+                            : '#F1F5F9',
+                          borderColor: isSelected ? '#10B981' : theme.border,
+                        },
+                      ]}
+                      activeOpacity={0.8}
+                    >
+                      <Text
+                        style={[
+                          styles.targetPillText,
+                          { color: isSelected ? '#FFFFFF' : theme.textSecondary },
+                        ]}
+                      >
+                        {c.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {/* Input Judul */}
+              <Text style={[styles.formFieldLabel, { color: theme.textPrimary }]}>
+                Judul Pengumuman
+              </Text>
+              <TextInput
+                style={[
+                  styles.formTextInput,
+                  {
+                    backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F8FAFC',
+                    borderColor: theme.border,
+                    color: theme.textPrimary,
+                  },
+                ]}
+                placeholder="Contoh: Pengumuman KBM Tatap Muka & Upacara"
+                placeholderTextColor={theme.textMuted}
+                value={broadcastTitle}
+                onChangeText={setBroadcastTitle}
+              />
+
+              {/* Input Pesan */}
+              <Text style={[styles.formFieldLabel, { color: theme.textPrimary }]}>
+                Isi Pesan Pengumuman
+              </Text>
+              <TextInput
+                style={[
+                  styles.formTextInput,
+                  styles.formTextArea,
+                  {
+                    backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : '#F8FAFC',
+                    borderColor: theme.border,
+                    color: theme.textPrimary,
+                  },
+                ]}
+                placeholder="Tuliskan isi pengumuman lengkap di sini..."
+                placeholderTextColor={theme.textMuted}
+                value={broadcastMessage}
+                onChangeText={setBroadcastMessage}
+                multiline
+                numberOfLines={4}
+                textAlignVertical="top"
+              />
+
+              <View style={styles.broadcastActionButtons}>
+                <TouchableOpacity
+                  style={[styles.cancelBtn, { borderColor: theme.border }]}
+                  onPress={() => setShowBroadcastModal(false)}
+                  disabled={isSendingBroadcast}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.cancelBtnText, { color: theme.textSecondary }]}>
+                    Batal
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.submitBroadcastBtn,
+                    { opacity: isSendingBroadcast ? 0.7 : 1 },
+                  ]}
+                  onPress={handleSendBroadcast}
+                  disabled={isSendingBroadcast}
+                  activeOpacity={0.8}
+                >
+                  {isSendingBroadcast ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <>
+                      <Ionicons name="send" size={16} color="#FFFFFF" />
+                      <Text style={styles.submitBroadcastBtnText}>Kirim Siaran</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* MODAL: AUDIT TRAIL */}
@@ -607,11 +842,14 @@ export default function AdminDashboardView({
         onRequestClose={() => setShowAuditModal(false)}
       >
         <View style={styles.modalBackdrop}>
-          <View style={[styles.modalSheet, { backgroundColor: theme.surface }]}>
+          <View style={[styles.modalSheet, { backgroundColor: theme.surface, maxHeight: '85%' }]}>
             <View style={styles.modalSheetHeader}>
-              <Text style={[styles.modalSheetTitle, { color: theme.textPrimary }]}>
-                Audit Trail & Log Sistem
-              </Text>
+              <View style={styles.modalTitleRow}>
+                <Ionicons name="shield-checkmark" size={19} color="#10B981" />
+                <Text style={[styles.modalSheetTitle, { color: theme.textPrimary }]}>
+                  Audit Trail & Log Sistem
+                </Text>
+              </View>
               <TouchableOpacity
                 style={[styles.closeIconWrap, { backgroundColor: theme.surfaceMuted }]}
                 onPress={() => setShowAuditModal(false)}
@@ -621,14 +859,64 @@ export default function AdminDashboardView({
             </View>
 
             <Text style={[styles.modalDescText, { color: theme.textSecondary }]}>
-              Seluruh operasi database, otentikasi login, dan transaksi Midtrans tercatat otomatis dalam log terenkripsi.
+              Seluruh operasi database, aktivitas presensi mengajar guru, transaksi digital, dan broadcast sekolah tercatat dalam audit log realtime.
             </Text>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 400 }}>
+              {recentAuditLogs.map((log, idx) => (
+                <View key={log.id || idx}>
+                  <View style={styles.logRow}>
+                    <View
+                      style={[
+                        styles.logIconBox,
+                        {
+                          backgroundColor: isDark
+                            ? 'rgba(255,255,255,0.06)'
+                            : 'rgba(79, 70, 229, 0.08)',
+                        },
+                      ]}
+                    >
+                      <Ionicons
+                        name={log.icon || 'time-outline'}
+                        size={15}
+                        color={log.color || theme.primary}
+                      />
+                    </View>
+                    <View style={styles.logTextCol}>
+                      <Text style={[styles.logText, { color: theme.textPrimary }]}>
+                        {log.text}
+                      </Text>
+                      <View style={styles.logMetaRow}>
+                        <Text style={[styles.logTime, { color: theme.textMuted }]}>{log.time}</Text>
+                        <View
+                          style={[
+                            styles.logTag,
+                            {
+                              backgroundColor: isDark
+                                ? 'rgba(255,255,255,0.08)'
+                                : 'rgba(0,0,0,0.05)',
+                            },
+                          ]}
+                        >
+                          <Text style={[styles.logTagText, { color: log.color || theme.textPrimary }]}>
+                            {log.tag}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  </View>
+                  {idx < recentAuditLogs.length - 1 && (
+                    <View style={[styles.logDivider, { backgroundColor: theme.border }]} />
+                  )}
+                </View>
+              ))}
+            </ScrollView>
 
             <AppButton
               title="Tutup Log"
               variant="outline"
               onPress={() => setShowAuditModal(false)}
-              style={{ marginTop: 12, marginBottom: 20 }}
+              style={{ marginTop: 14, marginBottom: 10 }}
             />
           </View>
         </View>
@@ -1054,5 +1342,72 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     marginBottom: 16,
+  },
+  formFieldLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+  targetPillRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 14,
+  },
+  targetPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  targetPillText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  formTextInput: {
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 13.5,
+    marginBottom: 14,
+  },
+  formTextArea: {
+    minHeight: 88,
+    paddingTop: 10,
+  },
+  broadcastActionButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 10,
+    marginTop: 4,
+    marginBottom: 16,
+  },
+  cancelBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  cancelBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  submitBroadcastBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#4F46E5',
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  submitBroadcastBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
   },
 });

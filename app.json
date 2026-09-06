@@ -7,14 +7,19 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "PedaGogiAI menggunakan Face ID untuk autentikasi cepat dan keamanan akun Anda."
+      }
     },
     "android": {
       "package": "com.inobel.pedagogiai",
       "versionCode": 1,
       "permissions": [
         "ACCESS_COARSE_LOCATION",
-        "ACCESS_FINE_LOCATION"
+        "ACCESS_FINE_LOCATION",
+        "USE_BIOMETRIC",
+        "USE_FINGERPRINT"
       ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
@@ -23,6 +28,14 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       }
     },
+    "plugins": [
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "PedaGogiAI menggunakan Face ID untuk autentikasi cepat dan keamanan akun Anda."
+        }
+      ]
+    ],
     "web": {
       "favicon": "./assets/favicon.png"
     }

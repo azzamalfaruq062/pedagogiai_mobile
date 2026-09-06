@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   ScrollView,
   StyleSheet,
   Platform,
   StatusBar,
+  RefreshControl,
 } from 'react-native';
 import { useTheme } from '../../hooks/useTheme';
 import { useAuth } from '../../hooks/useAuth';
@@ -28,6 +29,16 @@ export default function DashboardScreen({
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
   const { user } = useAuth();
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    setRefreshKey((prev) => prev + 1);
+    setTimeout(() => {
+      setRefreshing(false);
+    }, 650);
+  }, []);
 
   const androidStatusBar = Platform.OS === 'android' ? (StatusBar.currentHeight || 28) : 0;
   const safeTop = Math.max(insets.top || 0, androidStatusBar, Platform.OS === 'android' ? 36 : 44);
@@ -51,6 +62,7 @@ export default function DashboardScreen({
       case 'guru':
         return (
           <GuruDashboardView
+            key={`guru-${refreshKey}`}
             onNavigateToCourseList={onNavigateToCourseList}
             onNavigateToCourseDetail={onNavigateToCourseDetail}
             onNavigateToProfile={onNavigateToProfile}
@@ -62,6 +74,7 @@ export default function DashboardScreen({
       case 'admin':
         return (
           <AdminDashboardView
+            key={`admin-${refreshKey}`}
             onNavigateToCourseList={onNavigateToCourseList}
             onNavigateToCourseDetail={onNavigateToCourseDetail}
             onNavigateToCanteen={onNavigateToCanteen}
@@ -72,6 +85,7 @@ export default function DashboardScreen({
       case 'karyawan':
         return (
           <KaryawanDashboardView
+            key={`karyawan-${refreshKey}`}
             onNavigateToProfile={onNavigateToProfile}
             onNavigateToCanteen={onNavigateToCanteen}
             onNavigateToWallet={onNavigateToWallet}
@@ -82,6 +96,7 @@ export default function DashboardScreen({
       case 'kantin':
         return (
           <KantinDashboardView
+            key={`kantin-${refreshKey}`}
             onNavigateToProfile={onNavigateToProfile}
             onNavigateToCanteen={onNavigateToCanteen}
             onNavigateToWallet={onNavigateToWallet}
@@ -91,6 +106,7 @@ export default function DashboardScreen({
       default:
         return (
           <SiswaDashboardView
+            key={`siswa-${refreshKey}`}
             onNavigateToCanteen={onNavigateToCanteen}
             onNavigateToWallet={onNavigateToWallet}
             onNavigateToProfile={onNavigateToProfile}
@@ -114,6 +130,14 @@ export default function DashboardScreen({
         },
       ]}
       showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          colors={[theme.primary]}
+          tintColor={theme.primary}
+        />
+      }
     >
       {renderRoleDashboard()}
     </ScrollView>

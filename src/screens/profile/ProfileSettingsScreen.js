@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -18,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../hooks/useTheme';
 import { useAuth } from '../../hooks/useAuth';
 import { useCanteen } from '../../hooks/useCanteen';
+import { biometricService } from '../../services/biometricService';
 import AppButton from '../../components/common/AppButton';
 
 export default function ProfileSettingsScreen({ onNavigateToCanteen, onNavigateToWallet }) {
@@ -32,8 +33,105 @@ export default function ProfileSettingsScreen({ onNavigateToCanteen, onNavigateT
   const dynamicPaddingBottom = Math.max(insets.bottom || 0, 14) + 86;
 
   // Local preferences
-  const [biometricEnabled, setBiometricEnabled] = useState(true);
+  const [biometricEnabled, setBiometricEnabled] = useState(false);
+  const [biometricInfo, setBiometricInfo] = useState({
+    hasHardware: false,
+    isEnrolled: false,
+    isAvailable: false,
+    label: 'Biometrik & Face ID',
+    icon: 'finger-print-outline',
+  });
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+
+  // Initialize biometric status from hardware & saved preferences
+  useEffect(() => {
+    let isMounted = true;
+    const loadBiometricState = async () => {
+      try {
+        const info = await biometricService.checkBiometricSupport();
+        const savedEnabled = await biometricService.isBiometricEnabled();
+        if (isMounted) {
+          setBiometricInfo(info);
+          setBiometricEnabled(savedEnabled);
+        }
+      } catch (e) {
+        console.warn('[ProfileSettings] Failed to check biometrics:', e);
+      }
+    };
+    loadBiometricState();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const handleToggleBiometric = async (nextVal) => {
+    if (nextVal) {
+      // Re-check hardware and enrollment
+      const info = await biometricService.checkBiometricSupport();
+      setBiometricInfo(info);
+
+      if (!info.hasHardware) {
+        Alert.alert(
+          'Biometrik Tidak Didukung',
+          'Perangkat Anda tidak memiliki sensor biometrik atau pemindai wajah (Face ID).'
+        );
+        return;
+      }
+
+      if (!info.isEnrolled) {
+        Alert.alert(
+          'Biometrik Belum Didaftarkan',
+          `Sensor didukung, namun belum ada data ${info.label} yang didaftarkan di Pengaturan HP Anda.\n\nSilakan daftarkan sidik jari atau Face ID di Pengaturan Sistem terlebih dahulu.`
+        );
+        return;
+      }
+
+      // Prompt native authentication to verify ownership
+      const auth = await biometricService.authenticate(
+        `Konfirmasi ${info.label} untuk mengaktifkan login & transaksi cepat`
+      );
+
+      if (auth?.success) {
+        await biometricService.setBiometricEnabled(true);
+        setBiometricEnabled(true);
+
+        if (user) {
+          const prevCreds = (await biometricService.getBiometricCredentials()) || {};
+          await biometricService.saveBiometricCredentials({
+            ...prevCreds,
+            email: user.email || prevCreds.email,
+            user,
+            savedAt: new Date().toISOString(),
+          });
+        }
+
+        Alert.alert(
+          'Biometrik Aktif 🎉',
+          `${info.label} berhasil diaktifkan. Anda kini dapat masuk akun dan bertransaksi tanpa perlu memasukkan kata sandi setiap saat.`
+        );
+      } else {
+        // Did not succeed or user cancelled
+        setBiometricEnabled(false);
+      }
+    } else {
+      // Disabling
+      Alert.alert(
+        'Konfirmasi Nonaktifkan',
+        'Apakah Anda yakin ingin menonaktifkan login & konfirmasi dengan biometrik?',
+        [
+          { text: 'Batal', style: 'cancel' },
+          {
+            text: 'Nonaktifkan',
+            style: 'destructive',
+            onPress: async () => {
+              await biometricService.setBiometricEnabled(false);
+              setBiometricEnabled(false);
+            },
+          },
+        ]
+      );
+    }
+  };
 
   // Modals state
   const [showProfileModal, setShowProfileModal] = useState(false);
@@ -212,19 +310,46 @@ export default function ProfileSettingsScreen({ onNavigateToCanteen, onNavigateT
         {/* PIN & Biometrik Switch */}
         <View style={styles.menuRow}>
           <View style={[styles.iconBox, { backgroundColor: theme.surfaceMuted }]}>
-            <Ionicons name="finger-print-outline" size={18} color={theme.textSecondary} />
+            <Ionicons
+              name={biometricInfo?.icon || 'finger-print-outline'}
+              size={18}
+              color={biometricEnabled ? theme.primary : theme.textSecondary}
+            />
           </View>
           <View style={styles.menuContent}>
-            <Text style={[styles.menuTitle, { color: theme.textPrimary }]}>
-              Biometrik & Face ID
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Text style={[styles.menuTitle, { color: theme.textPrimary }]}>
+                {biometricInfo?.label || 'Biometrik & Face ID'}
+              </Text>
+              {biometricEnabled && (
+                <View
+                  style={{
+                    backgroundColor: isDark ? 'rgba(16, 185, 129, 0.2)' : '#D1FAE5',
+                    paddingHorizontal: 7,
+                    paddingVertical: 2,
+                    borderRadius: 6,
+                  }}
+                >
+                  <Text style={{ fontSize: 10, fontWeight: '700', color: '#10B981' }}>
+                    AKTIF
+                  </Text>
+                </View>
+              )}
+            </View>
             <Text style={[styles.menuDesc, { color: theme.textMuted }]}>
-              Konfirmasi transaksi lebih cepat
+              {!biometricInfo?.hasHardware
+                ? 'Sensor biometrik tidak didukung'
+                : !biometricInfo?.isEnrolled
+                ? 'Belum didaftarkan di pengaturan HP'
+                : biometricEnabled
+                ? `Login cepat & verifikasi dengan ${biometricInfo.label}`
+                : `Aktifkan untuk login dengan ${biometricInfo.label}`}
             </Text>
           </View>
           <Switch
             value={biometricEnabled}
-            onValueChange={setBiometricEnabled}
+            onValueChange={handleToggleBiometric}
+            disabled={!biometricInfo?.hasHardware && !biometricEnabled}
             trackColor={{ false: theme.border, true: theme.primary }}
             thumbColor="#FFFFFF"
           />

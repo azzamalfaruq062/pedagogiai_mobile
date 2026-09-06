@@ -5,16 +5,19 @@ import {
   TouchableOpacity,
   StyleSheet,
   Platform,
+  Text,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../hooks/useTheme';
 import { useCanteen } from '../../hooks/useCanteen';
+import { useNotifications } from '../../hooks/useNotifications';
 
 export default function AppHeader({ onNotificationPress, onSearchFocus }) {
   const insets = useSafeAreaInsets();
   const { theme, isDark } = useTheme();
   const { searchQuery, setSearchQuery } = useCanteen();
+  const { unreadCount } = useNotifications(true);
 
   // Clean padding from status bar, notch, and punch-hole cameras
   const dynamicPaddingTop =
@@ -95,8 +98,16 @@ export default function AppHeader({ onNotificationPress, onSearchFocus }) {
             size={20}
             color={theme.textSecondary}
           />
-          {/* Live Notification Indicator Dot */}
-          <View style={styles.badgeDot} />
+          {/* Live Notification Badge — shows count when > 0, dot otherwise */}
+          {unreadCount > 0 ? (
+            <View style={styles.badgeCounter}>
+              <Text style={styles.badgeCounterText}>
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </Text>
+            </View>
+          ) : (
+            <View style={styles.badgeDotHidden} />
+          )}
         </TouchableOpacity>
       </View>
     </View>
@@ -151,15 +162,31 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     position: 'relative',
   },
-  badgeDot: {
+  badgeCounter: {
     position: 'absolute',
-    top: 6,
-    right: 6,
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
+    top: 2,
+    right: 1,
+    minWidth: 17,
+    height: 17,
+    paddingHorizontal: 4,
+    borderRadius: 8.5,
     backgroundColor: '#F43F5E',
     borderWidth: 1.5,
     borderColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  badgeCounterText: {
+    color: '#FFFFFF',
+    fontSize: 9,
+    fontWeight: '900',
+    includeFontPadding: false,
+  },
+  badgeDotHidden: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 0,
+    height: 0,
   },
 });

@@ -134,8 +134,21 @@ export default function AttendanceJournalScreen({ onBack, schedule }) {
   const { theme, isDark } = useTheme();
   const { user } = useAuth();
 
+  // Session is excluded when explicitly requested OR when no active schedule item is provided
+  // (Teaching sessions can only be triggered when starting an active teaching session from schedule)
+  const isSessionExcluded = Boolean(
+    schedule?.excludeSession ||
+    (!schedule?.id && !schedule?.scheduleId && !schedule?.periodNumber && !schedule?.subject)
+  );
+
   // Primary navigation tab
-  const [activeTab, setActiveTab] = useState('session'); // 'session' | 'history' | 'recap'
+  const [activeTab, setActiveTab] = useState(isSessionExcluded ? 'history' : 'session'); // 'session' | 'history' | 'recap'
+
+  useEffect(() => {
+    if (isSessionExcluded && activeTab === 'session') {
+      setActiveTab('history');
+    }
+  }, [isSessionExcluded, activeTab]);
 
   // Sub-navigation for session view: 3 focused steps (Attendance -> Grades -> Journal)
   const [sessionSubTab, setSessionSubTab] = useState('attendance'); // 'attendance' | 'grades' | 'journal'
@@ -153,8 +166,8 @@ export default function AttendanceJournalScreen({ onBack, schedule }) {
   const [teacherCheckedIn, setTeacherCheckedIn] = useState(true);
   const [teacherCheckInTime, setTeacherCheckInTime] = useState('07:28 WIB');
 
-  // Student state (attendance + learning grade)
-  const [students, setStudents] = useState(INITIAL_STUDENTS);
+  // Student state (attendance + learning grade) - strictly enrolled students only
+  const [students, setStudents] = useState([]);
   const [studentSearch, setStudentSearch] = useState('');
 
   // History & KPI states from API
@@ -169,6 +182,7 @@ export default function AttendanceJournalScreen({ onBack, schedule }) {
   // Load active session from API
   useEffect(() => {
     async function loadSession() {
+      if (isSessionExcluded) return;
       setIsLoadingSession(true);
       try {
         const scheduleId = schedule?.id
@@ -181,9 +195,7 @@ export default function AttendanceJournalScreen({ onBack, schedule }) {
           const d = res.data;
           setJournalId(d.id);
           setScheduleInfo(d);
-          if (Array.isArray(d.students) && d.students.length > 0) {
-            setStudents(d.students);
-          }
+          setStudents(Array.isArray(d.students) ? d.students : []);
           if (d.teacherCheckedIn !== undefined) {
             setTeacherCheckedIn(d.teacherCheckedIn);
             if (d.teacherCheckInTime) {
@@ -325,8 +337,12 @@ export default function AttendanceJournalScreen({ onBack, schedule }) {
 
   // Mark all present
   const handleMarkAllPresent = () => {
+    if (students.length === 0) {
+      Alert.alert('Presensi Otomatis', 'Tidak ada siswa terdaftar pada kelas ini.');
+      return;
+    }
     setStudents((prev) => prev.map((s) => ({ ...s, status: 'H' })));
-    Alert.alert('Presensi Otomatis', 'Semua siswa (12) berhasil ditandai Hadir.');
+    Alert.alert('Presensi Otomatis', `Semua siswa (${students.length}) berhasil ditandai Hadir.`);
   };
 
   // Quick fill default score
@@ -552,10 +568,12 @@ export default function AttendanceJournalScreen({ onBack, schedule }) {
 
           <View style={styles.headerTitleWrap}>
             <Text style={[styles.headerTitle, { color: theme.textPrimary }]} numberOfLines={1}>
-              Presensi & Jurnal KBM
+              {isSessionExcluded ? 'Jurnal Guru & Rekap KBM' : 'Presensi & Jurnal KBM'}
             </Text>
             <Text style={[styles.headerSub, { color: theme.textMuted }]} numberOfLines={1}>
-              Kelas X RPL 1 • Semester Ganjil
+              {isSessionExcluded
+                ? 'Riwayat Jurnal Pembelajaran & Rekapitulasi'
+                : (scheduleInfo?.classroom?.name || scheduleInfo?.class || 'Kelas X RPL 1') + ' • Semester Ganjil'}
             </Text>
           </View>
 
@@ -569,20 +587,22 @@ export default function AttendanceJournalScreen({ onBack, schedule }) {
 
         {/* Primary Segmented Tabs */}
         <View style={[styles.segmentedControl, { backgroundColor: isDark ? theme.surfaceHighlight : '#F1F5F9' }]}>
-          <TouchableOpacity
-            style={[styles.segmentBtn, activeTab === 'session' && [styles.segmentBtnActive, { backgroundColor: theme.surface }]]}
-            onPress={() => setActiveTab('session')}
-            activeOpacity={0.85}
-          >
-            <Ionicons
-              name={activeTab === 'session' ? 'clipboard' : 'clipboard-outline'}
-              size={14}
-              color={activeTab === 'session' ? theme.primary : theme.textSecondary}
-            />
-            <Text style={[styles.segmentBtnText, { color: activeTab === 'session' ? theme.primary : theme.textSecondary }]}>
-              Sesi Mengajar
-            </Text>
-          </TouchableOpacity>
+          {!isSessionExcluded && (
+            <TouchableOpacity
+              style={[styles.segmentBtn, activeTab === 'session' && [styles.segmentBtnActive, { backgroundColor: theme.surface }]]}
+              onPress={() => setActiveTab('session')}
+              activeOpacity={0.85}
+            >
+              <Ionicons
+                name={activeTab === 'session' ? 'clipboard' : 'clipboard-outline'}
+                size={14}
+                color={activeTab === 'session' ? theme.primary : theme.textSecondary}
+              />
+              <Text style={[styles.segmentBtnText, { color: activeTab === 'session' ? theme.primary : theme.textSecondary }]}>
+                Sesi Mengajar
+              </Text>
+            </TouchableOpacity>
+          )}
 
           <TouchableOpacity
             style={[styles.segmentBtn, activeTab === 'history' && [styles.segmentBtnActive, { backgroundColor: theme.surface }]]}
@@ -624,8 +644,26 @@ export default function AttendanceJournalScreen({ onBack, schedule }) {
         {/* ===================================================================== */}
         {/* TAB 1: SESI KBM AKTIF */}
         {/* ===================================================================== */}
-        {activeTab === 'session' && (
+        {activeTab === 'session' && !isSessionExcluded && (
           <View style={styles.tabContainer}>
+            {/* Loading Indicator Banner */}
+            {isLoadingSession && (
+              <View
+                style={[
+                  styles.loadingBanner,
+                  {
+                    backgroundColor: isDark ? 'rgba(59, 130, 246, 0.15)' : '#EFF6FF',
+                    borderColor: isDark ? 'rgba(59, 130, 246, 0.3)' : '#BFDBFE',
+                  },
+                ]}
+              >
+                <ActivityIndicator size="small" color={theme.primary} style={{ marginRight: 8 }} />
+                <Text style={[styles.loadingBannerText, { color: isDark ? '#93C5FD' : '#1D4ED8' }]}>
+                  Memuat data sesi & siswa ter-enroll...
+                </Text>
+              </View>
+            )}
+
             {/* Compact Glassmorphic Hero Card */}
             <LinearGradient
               colors={['#1C2E5A', '#2B3B8B']}
@@ -847,7 +885,32 @@ export default function AttendanceJournalScreen({ onBack, schedule }) {
 
                 {/* Student Attendance Cards */}
                 <View style={styles.studentCardsList}>
-                  {filteredStudents.map((student) => {
+                  {isLoadingSession && students.length === 0 ? (
+                    <View style={styles.emptyEnrolledContainer}>
+                      <ActivityIndicator size="large" color={theme.primary} style={{ marginBottom: 12 }} />
+                      <Text style={[styles.emptyEnrolledTitle, { color: theme.textPrimary }]}>
+                        Memuat Data Siswa...
+                      </Text>
+                      <Text style={[styles.emptyEnrolledDesc, { color: theme.textMuted }]}>
+                        Sedang mengambil data siswa yang di-enroll di kelas ini...
+                      </Text>
+                    </View>
+                  ) : filteredStudents.length === 0 ? (
+                    <View style={styles.emptyEnrolledContainer}>
+                      <View style={[styles.emptyEnrolledIconBox, { backgroundColor: isDark ? 'rgba(99,102,241,0.12)' : '#EEF2FF' }]}>
+                        <Ionicons name="people-outline" size={30} color="#6366F1" />
+                      </View>
+                      <Text style={[styles.emptyEnrolledTitle, { color: theme.textPrimary }]}>
+                        {students.length === 0 ? 'Belum Ada Siswa Terdaftar' : 'Siswa Tidak Ditemukan'}
+                      </Text>
+                      <Text style={[styles.emptyEnrolledDesc, { color: theme.textMuted }]}>
+                        {students.length === 0
+                          ? 'Belum ada siswa yang di-enroll pada kelas ini untuk tahun pelajaran aktif.'
+                          : 'Tidak ada siswa yang sesuai dengan filter atau kata kunci pencarian.'}
+                      </Text>
+                    </View>
+                  ) : (
+                    filteredStudents.map((student) => {
                     const activeMeta = ATTENDANCE_STATUS_META[student.status] || ATTENDANCE_STATUS_META.H;
                     return (
                       <View
@@ -965,7 +1028,8 @@ export default function AttendanceJournalScreen({ onBack, schedule }) {
                         </View>
                       </View>
                     );
-                  })}
+                  })
+                )}
                 </View>
 
                 {/* Step Forward to Grades */}
@@ -1103,86 +1167,110 @@ export default function AttendanceJournalScreen({ onBack, schedule }) {
 
                 {/* Student Grade Cards List */}
                 <View style={styles.studentCardsList}>
-                  {students.map((student, idx) => {
-                    const hasScore = student.score !== '' && student.score !== null;
-                    const scoreNum = Number(student.score);
-                    const isPassed = hasScore && scoreNum >= KKM_PASSING_SCORE;
+                  {isLoadingSession && students.length === 0 ? (
+                    <View style={styles.emptyEnrolledContainer}>
+                      <ActivityIndicator size="large" color={theme.primary} style={{ marginBottom: 12 }} />
+                      <Text style={[styles.emptyEnrolledTitle, { color: theme.textPrimary }]}>
+                        Memuat Data Siswa...
+                      </Text>
+                      <Text style={[styles.emptyEnrolledDesc, { color: theme.textMuted }]}>
+                        Sedang mengambil data siswa untuk penilaian...
+                      </Text>
+                    </View>
+                  ) : students.length === 0 ? (
+                    <View style={styles.emptyEnrolledContainer}>
+                      <View style={[styles.emptyEnrolledIconBox, { backgroundColor: isDark ? theme.surfaceHighlight : '#F1F5F9' }]}>
+                        <Ionicons name="school-outline" size={28} color={theme.textMuted} />
+                      </View>
+                      <Text style={[styles.emptyEnrolledTitle, { color: theme.textPrimary }]}>
+                        Belum Ada Siswa Terdaftar
+                      </Text>
+                      <Text style={[styles.emptyEnrolledDesc, { color: theme.textMuted }]}>
+                        Tidak ada siswa yang di-enroll di kelas ini untuk tahun ajaran aktif. Penilaian belum dapat diinput.
+                      </Text>
+                    </View>
+                  ) : (
+                    students.map((student, idx) => {
+                      const hasScore = student.score !== '' && student.score !== null;
+                      const scoreNum = Number(student.score);
+                      const isPassed = hasScore && scoreNum >= KKM_PASSING_SCORE;
 
-                    return (
-                      <View
-                        key={student.id}
-                        style={[
-                          styles.studentGradeCard,
-                          { backgroundColor: theme.surface, borderColor: isDark ? theme.border : '#E8EDF4' },
-                        ]}
-                      >
-                        <View style={styles.gradeCardHeader}>
-                          <View style={[styles.studentAvatarBox, { backgroundColor: isDark ? '#334155' : '#EEF2FF' }]}>
-                            <Text style={[styles.studentAvatarText, { color: theme.primary }]}>
-                              {student.avatar}
-                            </Text>
-                          </View>
-
-                          <View style={{ flex: 1 }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                              <Text style={[styles.studentFullName, { color: theme.textPrimary }]} numberOfLines={1}>
-                                {student.name}
+                      return (
+                        <View
+                          key={student.id}
+                          style={[
+                            styles.studentGradeCard,
+                            { backgroundColor: theme.surface, borderColor: isDark ? theme.border : '#E8EDF4' },
+                          ]}
+                        >
+                          <View style={styles.gradeCardHeader}>
+                            <View style={[styles.studentAvatarBox, { backgroundColor: isDark ? '#334155' : '#EEF2FF' }]}>
+                              <Text style={[styles.studentAvatarText, { color: theme.primary }]}>
+                                {student.avatar}
                               </Text>
-                              <View style={[styles.miniStatusDot, { backgroundColor: ATTENDANCE_STATUS_META[student.status]?.text || '#10B981' }]} />
                             </View>
-                            <Text style={[styles.studentNisnNumber, { color: theme.textMuted }]}>
-                              Absen #{idx + 1} • {ATTENDANCE_STATUS_META[student.status]?.label || 'Hadir'}
-                            </Text>
+
+                            <View style={{ flex: 1 }}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <Text style={[styles.studentFullName, { color: theme.textPrimary }]} numberOfLines={1}>
+                                  {student.name}
+                                </Text>
+                                <View style={[styles.miniStatusDot, { backgroundColor: ATTENDANCE_STATUS_META[student.status]?.text || '#10B981' }]} />
+                              </View>
+                              <Text style={[styles.studentNisnNumber, { color: theme.textMuted }]}>
+                                Absen #{idx + 1} • {ATTENDANCE_STATUS_META[student.status]?.label || 'Hadir'}
+                              </Text>
+                            </View>
+
+                            {/* Score Input Field (Direct on card) */}
+                            <View style={styles.scoreInputContainer}>
+                              <TextInput
+                                style={[
+                                  styles.scoreInputField,
+                                  {
+                                    color: hasScore ? (isPassed ? '#15803D' : '#B91C1C') : theme.textPrimary,
+                                    borderColor: hasScore ? (isPassed ? '#86EFAC' : '#FCA5A5') : theme.border,
+                                    backgroundColor: hasScore ? (isPassed ? '#DCFCE7' : '#FEE2E2') : (isDark ? theme.surfaceHighlight : '#F8FAFC'),
+                                  },
+                                ]}
+                                placeholder="0-100"
+                                placeholderTextColor={theme.textMuted}
+                                keyboardType="numeric"
+                                maxLength={3}
+                                value={student.score}
+                                onChangeText={(val) => handleSetScore(student.id, val)}
+                              />
+                            </View>
                           </View>
 
-                          {/* Score Input Field (Direct on card) */}
-                          <View style={styles.scoreInputContainer}>
+                          {/* Feedback Note & Preset Chips */}
+                          <View style={styles.feedbackInputRow}>
                             <TextInput
-                              style={[
-                                styles.scoreInputField,
-                                {
-                                  color: hasScore ? (isPassed ? '#15803D' : '#B91C1C') : theme.textPrimary,
-                                  borderColor: hasScore ? (isPassed ? '#86EFAC' : '#FCA5A5') : theme.border,
-                                  backgroundColor: hasScore ? (isPassed ? '#DCFCE7' : '#FEE2E2') : (isDark ? theme.surfaceHighlight : '#F8FAFC'),
-                                },
-                              ]}
-                              placeholder="0-100"
+                              style={[styles.feedbackTextInput, { backgroundColor: isDark ? theme.surfaceHighlight : '#F8FAFC', color: theme.textPrimary, borderColor: theme.border }]}
+                              placeholder="Catatan umpan balik penilaian..."
                               placeholderTextColor={theme.textMuted}
-                              keyboardType="numeric"
-                              maxLength={3}
-                              value={student.score}
-                              onChangeText={(val) => handleSetScore(student.id, val)}
+                              value={student.gradeFeedback}
+                              onChangeText={(txt) => handleSetFeedback(student.id, txt)}
                             />
                           </View>
-                        </View>
 
-                        {/* Feedback Note & Preset Chips */}
-                        <View style={styles.feedbackInputRow}>
-                          <TextInput
-                            style={[styles.feedbackTextInput, { backgroundColor: isDark ? theme.surfaceHighlight : '#F8FAFC', color: theme.textPrimary, borderColor: theme.border }]}
-                            placeholder="Catatan umpan balik penilaian..."
-                            placeholderTextColor={theme.textMuted}
-                            value={student.gradeFeedback}
-                            onChangeText={(txt) => handleSetFeedback(student.id, txt)}
-                          />
+                          {/* Quick feedback preset chips */}
+                          <View style={styles.feedbackPresetsRow}>
+                            {['Sangat Baik', 'Aktif Bertanya', 'Perlu Bimbingan', 'Tugas Susulan'].map((preset) => (
+                              <TouchableOpacity
+                                key={preset}
+                                style={[styles.presetChip, { borderColor: theme.border, backgroundColor: isDark ? theme.surfaceHighlight : '#F1F5F9' }]}
+                                onPress={() => handleSetFeedback(student.id, preset)}
+                                activeOpacity={0.75}
+                              >
+                                <Text style={[styles.presetChipText, { color: theme.textSecondary }]}>{preset}</Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
                         </View>
-
-                        {/* Quick feedback preset chips */}
-                        <View style={styles.feedbackPresetsRow}>
-                          {['Sangat Baik', 'Aktif Bertanya', 'Perlu Bimbingan', 'Tugas Susulan'].map((preset) => (
-                            <TouchableOpacity
-                              key={preset}
-                              style={[styles.presetChip, { borderColor: theme.border, backgroundColor: isDark ? theme.surfaceHighlight : '#F1F5F9' }]}
-                              onPress={() => handleSetFeedback(student.id, preset)}
-                              activeOpacity={0.75}
-                            >
-                              <Text style={[styles.presetChipText, { color: theme.textSecondary }]}>{preset}</Text>
-                            </TouchableOpacity>
-                          ))}
-                        </View>
-                      </View>
-                    );
-                  })}
+                      );
+                    })
+                  )}
                 </View>
 
                 {/* Step Navigation Buttons */}
@@ -1977,4 +2065,45 @@ const styles = StyleSheet.create({
   modalCancelBtnText: { fontSize: 11, fontWeight: '700' },
   modalConfirmBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 },
   modalConfirmBtnText: { fontSize: 11, fontWeight: '800', color: '#FFF' },
+  emptyEnrolledContainer: {
+    paddingVertical: 36,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  emptyEnrolledIconBox: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 6,
+  },
+  emptyEnrolledTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  emptyEnrolledDesc: {
+    fontSize: 12,
+    fontWeight: '500',
+    textAlign: 'center',
+    maxWidth: 280,
+    lineHeight: 18,
+  },
+  loadingBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 10,
+  },
+  loadingBannerText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
 });

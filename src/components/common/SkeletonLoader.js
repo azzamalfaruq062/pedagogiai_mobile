@@ -254,6 +254,138 @@ export function LessonSkeleton({ isDark }) {
   );
 }
 
+/**
+ * Canteen horizontal category chips skeleton
+ */
+export function CanteenCategorySkeleton({ count = 5, isDark }) {
+  const items = Array.from({ length: count });
+  const chipWidths = [70, 95, 80, 85, 90];
+
+  return (
+    <View style={styles.categorySkeletonRow}>
+      {items.map((_, idx) => (
+        <SkeletonBox
+          key={idx}
+          width={chipWidths[idx % chipWidths.length]}
+          height={32}
+          borderRadius={10}
+          isDark={isDark}
+          style={{ marginRight: 8 }}
+        />
+      ))}
+    </View>
+  );
+}
+
+/**
+ * Canteen vertical food catalog items skeleton
+ */
+export function CanteenMenuSkeleton({ count = 4, isDark }) {
+  const items = Array.from({ length: count });
+
+  return (
+    <View style={styles.canteenMenuList}>
+      {items.map((_, idx) => (
+        <View
+          key={idx}
+          style={[
+            styles.canteenCardSkeleton,
+            {
+              backgroundColor: isDark ? '#141A2D' : '#FFFFFF',
+              borderColor: isDark ? '#1E2744' : '#F1F5F9',
+            },
+          ]}
+        >
+          {/* Left info column */}
+          <View style={styles.canteenInfoCol}>
+            {/* Stall name & rating skeleton */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+              <SkeletonBox width={100} height={12} borderRadius={4} isDark={isDark} />
+              <SkeletonBox width={32} height={12} borderRadius={4} isDark={isDark} />
+            </View>
+
+            {/* Food title */}
+            <SkeletonBox width="85%" height={15} borderRadius={5} isDark={isDark} style={{ marginBottom: 6 }} />
+
+            {/* Description lines */}
+            <SkeletonBox width="95%" height={11} borderRadius={4} isDark={isDark} style={{ marginBottom: 4 }} />
+            <SkeletonBox width="65%" height={11} borderRadius={4} isDark={isDark} style={{ marginBottom: 12 }} />
+
+            {/* Price pill */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <SkeletonBox width={75} height={16} borderRadius={5} isDark={isDark} />
+              <SkeletonBox width={45} height={12} borderRadius={4} isDark={isDark} />
+            </View>
+          </View>
+
+          {/* Right image + action button column */}
+          <View style={styles.canteenImageCol}>
+            <SkeletonBox width={92} height={92} borderRadius={14} isDark={isDark} />
+            <SkeletonBox width={74} height={28} borderRadius={9} isDark={isDark} style={{ marginTop: -14 }} />
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+/**
+ * Teacher daily schedule timeline skeleton (Jadwal Mengajar Hari Ini)
+ */
+export function TeacherScheduleSkeleton({ count = 3, isDark }) {
+  const items = Array.from({ length: count });
+
+  return (
+    <View style={styles.scheduleSkeletonContainer}>
+      <View
+        style={[
+          styles.scheduleTrackLineSkeleton,
+          { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#E2E8F0' },
+        ]}
+      />
+
+      {items.map((_, idx) => (
+        <View key={idx} style={styles.scheduleTimelineRowSkeleton}>
+          {/* Node marker skeleton */}
+          <SkeletonBox
+            width={28}
+            height={28}
+            borderRadius={14}
+            isDark={isDark}
+            style={{ marginRight: 10, marginTop: 4 }}
+          />
+
+          {/* Card skeleton */}
+          <View
+            style={[
+              styles.scheduleCardSkeleton,
+              {
+                backgroundColor: isDark ? '#141A2D' : '#F8FAFC',
+                borderColor: isDark ? '#1E2744' : '#E2E8F0',
+              },
+            ]}
+          >
+            {/* Top row: time + badge */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <SkeletonBox width={120} height={12} borderRadius={4} isDark={isDark} />
+              <SkeletonBox width={68} height={16} borderRadius={6} isDark={isDark} />
+            </View>
+
+            {/* Subject / Class Title */}
+            <SkeletonBox width="80%" height={15} borderRadius={5} isDark={isDark} style={{ marginBottom: 6 }} />
+
+            {/* Room & note */}
+            <SkeletonBox width="55%" height={11} borderRadius={4} isDark={isDark} style={{ marginBottom: 12 }} />
+
+            {/* Action button */}
+            <SkeletonBox width="100%" height={34} borderRadius={10} isDark={isDark} />
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   cardVerticalList: {
     flexDirection: 'column',
@@ -289,5 +421,55 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     padding: 20,
+  },
+  categorySkeletonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+  },
+  canteenMenuList: {
+    flexDirection: 'column',
+    gap: 12,
+    width: '100%',
+  },
+  canteenCardSkeleton: {
+    flexDirection: 'row',
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 14,
+    justifyContent: 'space-between',
+  },
+  canteenInfoCol: {
+    flex: 1,
+    paddingRight: 12,
+    justifyContent: 'center',
+  },
+  canteenImageCol: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scheduleSkeletonContainer: {
+    position: 'relative',
+    paddingTop: 4,
+  },
+  scheduleTrackLineSkeleton: {
+    position: 'absolute',
+    left: 14,
+    top: 14,
+    bottom: 14,
+    width: 2,
+    borderRadius: 1,
+  },
+  scheduleTimelineRowSkeleton: {
+    flexDirection: 'row',
+    marginBottom: 14,
+    alignItems: 'flex-start',
+  },
+  scheduleCardSkeleton: {
+    flex: 1,
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 14,
   },
 });

@@ -7,25 +7,36 @@ import {
   TouchableOpacity,
   Image,
   StyleSheet,
+  RefreshControl,
+  Platform,
+  StatusBar,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../hooks/useTheme';
 import { useCanteen } from '../../hooks/useCanteen';
-import { CANTEEN_CATEGORIES } from '../../constants/canteenData';
+import {
+  CanteenCategorySkeleton,
+  CanteenMenuSkeleton,
+} from '../../components/common/SkeletonLoader';
 import CanteenCartModal from './CanteenCartModal';
-
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Platform, StatusBar } from 'react-native';
 
 export default function CanteenMenuScreen({ onNavigateToWallet }) {
   const insets = useSafeAreaInsets();
   const { theme, isDark } = useTheme();
 
-  const androidStatusBar = Platform.OS === 'android' ? (StatusBar.currentHeight || 28) : 0;
-  const safeTop = Math.max(insets.top || 0, androidStatusBar, Platform.OS === 'android' ? 36 : 44);
+  const androidStatusBar =
+    Platform.OS === 'android' ? StatusBar.currentHeight || 28 : 0;
+  const safeTop = Math.max(
+    insets.top || 0,
+    androidStatusBar,
+    Platform.OS === 'android' ? 36 : 44
+  );
   const dynamicPaddingTop = safeTop + 62;
   const dynamicPaddingBottom = Math.max(insets.bottom || 0, 14) + 86;
+
   const {
+    categories,
     products,
     wallet,
     cart,
@@ -37,20 +48,34 @@ export default function CanteenMenuScreen({ onNavigateToWallet }) {
     setSelectedCategory,
     searchQuery,
     setSearchQuery,
+    isLoadingProducts,
+    refreshWallet,
+    isRefreshing,
   } = useCanteen();
 
   const [isCartVisible, setIsCartVisible] = useState(false);
+  const [imageErrorIds, setImageErrorIds] = useState({});
 
-  // Filter products by category & search query
+  // Filter products by category & search query from live Laravel data
   const filteredProducts = products.filter((prod) => {
     const matchesCat =
-      selectedCategory === 'all' || prod.category === selectedCategory;
+      selectedCategory === 'all' ||
+      prod.category === selectedCategory ||
+      prod.categorySlug === selectedCategory ||
+      String(prod.categoryId) === String(selectedCategory);
+
     const matchesSearch =
       !searchQuery.trim() ||
       prod.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      prod.stall.toLowerCase().includes(searchQuery.toLowerCase());
+      (prod.stall && prod.stall.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (prod.categoryName && prod.categoryName.toLowerCase().includes(searchQuery.toLowerCase()));
+
     return matchesCat && matchesSearch;
   });
+
+  const handleImageError = (id) => {
+    setImageErrorIds((prev) => ({ ...prev, [id]: true }));
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
@@ -100,13 +125,31 @@ export default function CanteenMenuScreen({ onNavigateToWallet }) {
             ]}
           >
             <View style={styles.searchActiveLeft}>
-              <Ionicons name="search" size={13} color={isDark ? '#818CF8' : '#4F46E5'} />
-              <Text style={[styles.searchActiveText, { color: isDark ? '#C7D2FE' : '#3730A3' }]}>
-                Hasil pencarian: <Text style={{ fontWeight: '800' }}>"{searchQuery}"</Text> ({filteredProducts.length} menu)
+              <Ionicons
+                name="search"
+                size={13}
+                color={isDark ? '#818CF8' : '#4F46E5'}
+              />
+              <Text
+                style={[
+                  styles.searchActiveText,
+                  { color: isDark ? '#C7D2FE' : '#3730A3' },
+                ]}
+              >
+                Hasil pencarian:{' '}
+                <Text style={{ fontWeight: '800' }}>"{searchQuery}"</Text> (
+                {filteredProducts.length} menu)
               </Text>
             </View>
-            <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-              <Ionicons name="close-circle" size={16} color={isDark ? '#818CF8' : '#4F46E5'} />
+            <TouchableOpacity
+              onPress={() => setSearchQuery('')}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons
+                name="close-circle"
+                size={16}
+                color={isDark ? '#818CF8' : '#4F46E5'}
+              />
             </TouchableOpacity>
           </View>
         )}
@@ -114,45 +157,49 @@ export default function CanteenMenuScreen({ onNavigateToWallet }) {
 
       {/* HORIZONTAL CATEGORY CHIPS */}
       <View style={styles.categoryWrap}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.categoryScroll}
-        >
-          {CANTEEN_CATEGORIES.map((cat) => {
-            const isSelected = selectedCategory === cat.id;
-            return (
-              <TouchableOpacity
-                key={cat.id}
-                onPress={() => setSelectedCategory(cat.id)}
-                activeOpacity={0.8}
-                style={[
-                  styles.categoryChip,
-                  {
-                    backgroundColor: isSelected
-                      ? theme.primary
-                      : isDark
-                      ? '#141A2D'
-                      : '#FFFFFF',
-                    borderColor: isSelected ? theme.primary : theme.border,
-                  },
-                ]}
-              >
-                <Text
+        {isLoadingProducts && categories.length <= 1 ? (
+          <CanteenCategorySkeleton isDark={isDark} />
+        ) : (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.categoryScroll}
+          >
+            {categories.map((cat) => {
+              const isSelected = selectedCategory === cat.id;
+              return (
+                <TouchableOpacity
+                  key={cat.id}
+                  onPress={() => setSelectedCategory(cat.id)}
+                  activeOpacity={0.8}
                   style={[
-                    styles.categoryLabel,
+                    styles.categoryChip,
                     {
-                      color: isSelected ? '#FFFFFF' : theme.textSecondary,
-                      fontWeight: isSelected ? '700' : '600',
+                      backgroundColor: isSelected
+                        ? theme.primary
+                        : isDark
+                        ? '#141A2D'
+                        : '#FFFFFF',
+                      borderColor: isSelected ? theme.primary : theme.border,
                     },
                   ]}
                 >
-                  {cat.name}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
+                  <Text
+                    style={[
+                      styles.categoryLabel,
+                      {
+                        color: isSelected ? '#FFFFFF' : theme.textSecondary,
+                        fontWeight: isSelected ? '700' : '600',
+                      },
+                    ]}
+                  >
+                    {cat.name}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        )}
       </View>
 
       {/* MOBILE-FIRST FOOD CATALOG LIST */}
@@ -162,156 +209,249 @@ export default function CanteenMenuScreen({ onNavigateToWallet }) {
           styles.listContent,
           { paddingBottom: dynamicPaddingBottom + (cartCount > 0 ? 56 : 16) },
         ]}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={refreshWallet}
+            colors={[theme.primary]}
+            tintColor={theme.primary}
+          />
+        }
       >
         <View style={styles.menuHeaderRow}>
           <Text style={[styles.menuHeaderTitle, { color: theme.textPrimary }]}>
             Pilihan Menu
           </Text>
-          <Text style={[styles.menuHeaderCount, { color: theme.textMuted }]}>
-            {filteredProducts.length} menu
-          </Text>
+          {!isLoadingProducts && (
+            <Text style={[styles.menuHeaderCount, { color: theme.textMuted }]}>
+              {filteredProducts.length} menu
+            </Text>
+          )}
         </View>
 
-        {filteredProducts.map((item) => {
-          const cartItem = cart.find((c) => c.id === item.id);
-          const inCartCount = cartItem?.quantity || 0;
-
-          return (
+        {/* 1. SKELETON LOADER STATE */}
+        {isLoadingProducts ? (
+          <CanteenMenuSkeleton count={5} isDark={isDark} />
+        ) : filteredProducts.length === 0 ? (
+          /* 2. EMPTY STATE */
+          <View
+            style={[
+              styles.emptyStateCard,
+              {
+                backgroundColor: isDark ? '#141A2D' : '#FFFFFF',
+                borderColor: theme.border,
+              },
+            ]}
+          >
             <View
-              key={item.id}
               style={[
-                styles.foodCard,
+                styles.emptyIconCircle,
                 {
-                  backgroundColor: theme.surface,
-                  borderColor: theme.border,
+                  backgroundColor: isDark
+                    ? 'rgba(99,102,241,0.15)'
+                    : '#EEF2FF',
                 },
               ]}
             >
-              {/* Left Column: Text & Price Info */}
-              <View style={styles.cardInfoCol}>
-                {/* Stall & Rating */}
-                <View style={styles.stallRatingRow}>
-                  <Text
-                    style={[styles.stallName, { color: theme.textMuted }]}
-                    numberOfLines={1}
-                  >
-                    {item.stall}
-                  </Text>
-                  <View style={styles.dotSeparator} />
-                  <View style={styles.ratingRow}>
-                    <Ionicons name="star" size={11} color="#F59E0B" />
+              <Ionicons
+                name="fast-food-outline"
+                size={36}
+                color={theme.primary}
+              />
+            </View>
+            <Text style={[styles.emptyTitle, { color: theme.textPrimary }]}>
+              {searchQuery.trim()
+                ? 'Menu Tidak Ditemukan'
+                : 'Belum Ada Menu Tersedia'}
+            </Text>
+            <Text style={[styles.emptyDesc, { color: theme.textSecondary }]}>
+              {searchQuery.trim()
+                ? `Tidak ada menu yang sesuai dengan kata kunci "${searchQuery}".`
+                : 'Menu pada kategori ini belum ditambahkan oleh pengelola kantin.'}
+            </Text>
+
+            {(selectedCategory !== 'all' || searchQuery.trim()) && (
+              <TouchableOpacity
+                style={[styles.resetFilterBtn, { backgroundColor: theme.primary }]}
+                onPress={() => {
+                  setSelectedCategory('all');
+                  setSearchQuery('');
+                }}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="refresh-outline" size={14} color="#FFFFFF" />
+                <Text style={styles.resetFilterText}>Tampilkan Semua Menu</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        ) : (
+          /* 3. LIVE PRODUCT ITEMS LIST */
+          filteredProducts.map((item) => {
+            const cartItem = cart.find((c) => c.id === item.id);
+            const inCartCount = cartItem?.quantity || 0;
+            const hasImg = Boolean(item.imageUrl) && !imageErrorIds[item.id];
+
+            return (
+              <View
+                key={item.id}
+                style={[
+                  styles.foodCard,
+                  {
+                    backgroundColor: theme.surface,
+                    borderColor: theme.border,
+                  },
+                ]}
+              >
+                {/* Left Column: Text & Price Info */}
+                <View style={styles.cardInfoCol}>
+                  {/* Stall & Rating */}
+                  <View style={styles.stallRatingRow}>
                     <Text
-                      style={[styles.ratingVal, { color: theme.textSecondary }]}
+                      style={[styles.stallName, { color: theme.textMuted }]}
+                      numberOfLines={1}
                     >
-                      {item.rating}
+                      {item.stall || 'Kantin Sekolah'}
+                    </Text>
+                    <View style={styles.dotSeparator} />
+                    <View style={styles.ratingRow}>
+                      <Ionicons name="star" size={11} color="#F59E0B" />
+                      <Text
+                        style={[
+                          styles.ratingVal,
+                          { color: theme.textSecondary },
+                        ]}
+                      >
+                        {item.rating || 4.9}
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Food Name */}
+                  <Text
+                    style={[styles.foodName, { color: theme.textPrimary }]}
+                    numberOfLines={2}
+                  >
+                    {item.name}
+                  </Text>
+
+                  {/* Brief description */}
+                  <Text
+                    style={[styles.foodDesc, { color: theme.textSecondary }]}
+                    numberOfLines={2}
+                  >
+                    {item.description || `${item.categoryName || 'Kantin'}`}
+                  </Text>
+
+                  {/* Price & Prep time */}
+                  <View style={styles.priceRow}>
+                    <Text style={[styles.priceText, { color: theme.primary }]}>
+                      {item.formattedPrice ||
+                        `Rp ${Number(item.price || 0).toLocaleString('id-ID')}`}
+                    </Text>
+                    <Text style={[styles.prepTime, { color: theme.textMuted }]}>
+                      {item.prepTime || '5-10 mnt'}
                     </Text>
                   </View>
                 </View>
 
-                {/* Food Name */}
-                <Text
-                  style={[styles.foodName, { color: theme.textPrimary }]}
-                  numberOfLines={2}
-                >
-                  {item.name}
-                </Text>
-
-                {/* Brief description */}
-                <Text
-                  style={[styles.foodDesc, { color: theme.textSecondary }]}
-                  numberOfLines={2}
-                >
-                  {item.description}
-                </Text>
-
-                {/* Price & Prep time */}
-                <View style={styles.priceRow}>
-                  <Text style={[styles.priceText, { color: theme.primary }]}>
-                    Rp {item.price.toLocaleString('id-ID')}
-                  </Text>
-                  <Text style={[styles.prepTime, { color: theme.textMuted }]}>
-                    {item.prepTime}
-                  </Text>
-                </View>
-              </View>
-
-              {/* Right Column: Catalog Image & Add Button */}
-              <View style={styles.cardImageCol}>
-                <Image
-                  source={{ uri: item.imageUrl }}
-                  style={styles.foodImage}
-                  resizeMode="cover"
-                />
-
-                {item.badge && (
-                  <View
-                    style={[
-                      styles.imageBadge,
-                      { backgroundColor: theme.primary },
-                    ]}
-                  >
-                    <Text style={styles.imageBadgeText}>{item.badge}</Text>
-                  </View>
-                )}
-
-                {/* Add / Stepper Button */}
-                <View style={styles.actionBtnContainer}>
-                  {inCartCount === 0 ? (
-                    <TouchableOpacity
-                      style={[
-                        styles.addBtn,
-                        {
-                          backgroundColor: theme.surface,
-                          borderColor: theme.primary,
-                        },
-                      ]}
-                      onPress={() => addToCart(item)}
-                      activeOpacity={0.8}
-                    >
-                      <Ionicons name="add" size={16} color={theme.primary} />
-                      <Text
-                        style={[styles.addBtnText, { color: theme.primary }]}
-                      >
-                        Pesan
-                      </Text>
-                    </TouchableOpacity>
+                {/* Right Column: Catalog Image & Add Button */}
+                <View style={styles.cardImageCol}>
+                  {hasImg ? (
+                    <Image
+                      source={{ uri: item.imageUrl }}
+                      style={styles.foodImage}
+                      resizeMode="cover"
+                      onError={() => handleImageError(item.id)}
+                    />
                   ) : (
                     <View
                       style={[
-                        styles.stepperBox,
+                        styles.foodImageFallback,
                         {
-                          backgroundColor: theme.primary,
+                          backgroundColor: isDark ? '#1E2744' : '#F1F5F9',
                         },
                       ]}
                     >
-                      <TouchableOpacity
-                        onPress={() => updateQuantity(item.id, -1)}
-                        style={styles.stepTouch}
-                        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                      >
-                        <Ionicons
-                          name={inCartCount === 1 ? 'trash-outline' : 'remove'}
-                          size={13}
-                          color="#FFFFFF"
-                        />
-                      </TouchableOpacity>
-
-                      <Text style={styles.stepNum}>{inCartCount}</Text>
-
-                      <TouchableOpacity
-                        onPress={() => updateQuantity(item.id, 1)}
-                        style={styles.stepTouch}
-                        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                      >
-                        <Ionicons name="add" size={13} color="#FFFFFF" />
-                      </TouchableOpacity>
+                      <Ionicons
+                        name="restaurant-outline"
+                        size={28}
+                        color={isDark ? '#64748B' : '#94A3B8'}
+                      />
                     </View>
                   )}
+
+                  {item.badge && (
+                    <View
+                      style={[
+                        styles.imageBadge,
+                        { backgroundColor: theme.primary },
+                      ]}
+                    >
+                      <Text style={styles.imageBadgeText}>{item.badge}</Text>
+                    </View>
+                  )}
+
+                  {/* Add / Stepper Button */}
+                  <View style={styles.actionBtnContainer}>
+                    {inCartCount === 0 ? (
+                      <TouchableOpacity
+                        style={[
+                          styles.addBtn,
+                          {
+                            backgroundColor: theme.surface,
+                            borderColor: theme.primary,
+                          },
+                        ]}
+                        onPress={() => addToCart(item)}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons name="add" size={16} color={theme.primary} />
+                        <Text
+                          style={[styles.addBtnText, { color: theme.primary }]}
+                        >
+                          Pesan
+                        </Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <View
+                        style={[
+                          styles.stepperBox,
+                          {
+                            backgroundColor: theme.primary,
+                          },
+                        ]}
+                      >
+                        <TouchableOpacity
+                          onPress={() => updateQuantity(item.id, -1)}
+                          style={styles.stepTouch}
+                          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                        >
+                          <Ionicons
+                            name={
+                              inCartCount === 1 ? 'trash-outline' : 'remove'
+                            }
+                            size={13}
+                            color="#FFFFFF"
+                          />
+                        </TouchableOpacity>
+
+                        <Text style={styles.stepNum}>{inCartCount}</Text>
+
+                        <TouchableOpacity
+                          onPress={() => updateQuantity(item.id, 1)}
+                          style={styles.stepTouch}
+                          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                        >
+                          <Ionicons name="add" size={13} color="#FFFFFF" />
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </View>
                 </View>
               </View>
-            </View>
-          );
-        })}
+            );
+          })
+        )}
       </ScrollView>
 
       {/* FLOATING CART BAR */}
@@ -539,6 +679,13 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     backgroundColor: '#E2E8F0',
   },
+  foodImageFallback: {
+    width: 100,
+    height: 90,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   imageBadge: {
     position: 'absolute',
     top: 6,
@@ -653,6 +800,48 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   floatActionText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  emptyStateCard: {
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 20,
+    gap: 10,
+  },
+  emptyIconCircle: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+  emptyDesc: {
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: 'center',
+    maxWidth: 240,
+  },
+  resetFilterBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 10,
+    gap: 6,
+    marginTop: 8,
+  },
+  resetFilterText: {
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '700',
