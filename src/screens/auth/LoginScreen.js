@@ -41,7 +41,6 @@ export default function LoginScreen({ onNavigateToRegister, onLoginSuccess }) {
   const [biometricInfo, setBiometricInfo] = useState(null);
   const [savedAccount, setSavedAccount] = useState(null);
   const [isBioAuthenticating, setIsBioAuthenticating] = useState(false);
-  const hasAutoPromptedRef = useRef(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -72,17 +71,6 @@ export default function LoginScreen({ onNavigateToRegister, onLoginSuccess }) {
       isMounted = false;
     };
   }, []);
-
-  // Auto-prompt biometrics on screen load when enabled and credentials are ready
-  useEffect(() => {
-    if (canUseBiometrics && !hasAutoPromptedRef.current) {
-      hasAutoPromptedRef.current = true;
-      const timer = setTimeout(() => {
-        handleBiometricLogin();
-      }, 450);
-      return () => clearTimeout(timer);
-    }
-  }, [canUseBiometrics]);
 
   const handleBiometricLogin = async () => {
     if (isBioAuthenticating) return;
@@ -292,52 +280,64 @@ export default function LoginScreen({ onNavigateToRegister, onLoginSuccess }) {
         </View>
 
         {/* ── Biometric Quick Login ── */}
-        {canUseBiometrics && (
-          <View style={{ marginBottom: 14 }}>
+        {/* {canUseBiometrics && (
+          <View style={styles.biometricContainer}>
             <TouchableOpacity
               style={[
-                styles.biometricBtn,
+                styles.biometricCard,
                 {
-                  backgroundColor: isDark ? 'rgba(99, 102, 241, 0.14)' : '#EEF2FF',
-                  borderColor: isDark ? '#6366F1' : '#C7D2FE',
+                  backgroundColor: isDark ? 'rgba(99, 102, 241, 0.12)' : '#F0F4FF',
+                  borderColor: isDark ? 'rgba(99, 102, 241, 0.35)' : '#C7D2FE',
                 },
               ]}
               onPress={handleBiometricLogin}
               disabled={isLoading || isBioAuthenticating}
-              activeOpacity={0.8}
+              activeOpacity={0.82}
             >
               <View style={[styles.biometricIconBox, { backgroundColor: theme.primary }]}>
                 {isBioAuthenticating ? (
                   <ActivityIndicator size="small" color="#FFFFFF" />
                 ) : (
                   <Ionicons
-                    name={biometricInfo?.icon || 'finger-print-outline'}
-                    size={20}
+                    name={biometricInfo?.icon || 'finger-print'}
+                    size={22}
                     color="#FFFFFF"
                   />
                 )}
               </View>
+
               <View style={styles.biometricInfoText}>
-                <Text style={[styles.biometricTitle, { color: theme.textPrimary }]}>
-                  Masuk Cepat dengan {biometricInfo?.label || 'Face ID'}
-                </Text>
+                <View style={styles.biometricHeaderRow}>
+                  <Text style={[styles.biometricTitle, { color: theme.textPrimary }]}>
+                    Masuk dengan {biometricInfo?.hasFingerprint ? 'Sidik Jari' : (biometricInfo?.label || 'Sidik Jari')}
+                  </Text>
+                  <View
+                    style={[
+                      styles.instantBadge,
+                      { backgroundColor: isDark ? 'rgba(52, 211, 153, 0.20)' : '#D1FAE5' },
+                    ]}
+                  >
+                    <Text style={[styles.instantBadgeText, { color: '#059669' }]}>INSTAN</Text>
+                  </View>
+                </View>
                 <Text style={[styles.biometricSub, { color: theme.textSecondary }]} numberOfLines={1}>
-                  {savedAccount?.name || savedAccount?.email || 'Akun tersimpan'}
+                  {savedAccount?.name ? `${savedAccount.name} • ` : ''}Ketuk untuk verifikasi
                 </Text>
               </View>
+
               <View
                 style={[
                   styles.biometricArrowBox,
                   { backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#E0E7FF' },
                 ]}
               >
-                <Ionicons name="scan-outline" size={16} color={theme.primary} />
+                <Ionicons name="scan-outline" size={17} color={theme.primary} />
               </View>
             </TouchableOpacity>
 
             <TouchableOpacity
               onPress={handleResetBiometrics}
-              style={{ alignSelf: 'center', marginTop: 4 }}
+              style={styles.switchAccountBtn}
               activeOpacity={0.7}
             >
               <Text style={{ fontSize: 12, color: theme.textMuted, fontWeight: '500' }}>
@@ -346,17 +346,47 @@ export default function LoginScreen({ onNavigateToRegister, onLoginSuccess }) {
               </Text>
             </TouchableOpacity>
           </View>
-        )}
+        )} */}
 
-        {/* ── Primary Action ── */}
-        <AppButton
-          title="Masuk Sekarang"
-          icon="arrow-forward"
-          onPress={handleLogin}
-          loading={isLoading && !isBioAuthenticating}
-          variant="primary"
-          style={styles.ctaButton}
-        />
+        {/* ── Primary Action Row ── */}
+        <View style={styles.actionRow}>
+          <View style={{ flex: 1 }}>
+            <AppButton
+              title="Masuk Sekarang"
+              icon="arrow-forward"
+              onPress={handleLogin}
+              loading={isLoading && !isBioAuthenticating}
+              variant="primary"
+              style={styles.ctaButton}
+            />
+          </View>
+
+          {canUseBiometrics && (
+            <TouchableOpacity
+              style={[
+                styles.biometricQuickBtn,
+                {
+                  backgroundColor: isDark ? 'rgba(99, 102, 241, 0.16)' : '#EEF2FF',
+                  borderColor: isDark ? '#6366F1' : '#C7D2FE',
+                },
+              ]}
+              onPress={handleBiometricLogin}
+              disabled={isLoading || isBioAuthenticating}
+              activeOpacity={0.8}
+              accessibilityLabel="Masuk Cepat dengan Sidik Jari"
+            >
+              {isBioAuthenticating ? (
+                <ActivityIndicator size="small" color={theme.primary} />
+              ) : (
+                <Ionicons
+                  name={biometricInfo?.icon || 'finger-print'}
+                  size={26}
+                  color={theme.primary}
+                />
+              )}
+            </TouchableOpacity>
+          )}
+        </View>
 
         {/* Hint for unconfigured biometrics */}
         {biometricInfo?.isAvailable && !canUseBiometrics && (
@@ -490,44 +520,84 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
   },
-  biometricBtn: {
+  biometricContainer: {
+    marginBottom: 16,
+  },
+  biometricCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
-    borderRadius: 14,
-    borderWidth: 1.2,
-    marginBottom: 14,
+    padding: 13,
+    borderRadius: 16,
+    borderWidth: 1.5,
     gap: 12,
+    shadowColor: '#4F46E5',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
   },
   biometricIconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
   biometricInfoText: {
     flex: 1,
   },
+  biometricHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   biometricTitle: {
     fontSize: 14,
     fontWeight: '700',
     letterSpacing: -0.2,
   },
+  instantBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginLeft: 6,
+  },
+  instantBadgeText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
   biometricSub: {
-    fontSize: 11.5,
+    fontSize: 12,
     marginTop: 2,
     fontWeight: '500',
   },
   biometricArrowBox: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  switchAccountBtn: {
+    alignSelf: 'center',
+    marginTop: 6,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 2,
+  },
+  biometricQuickBtn: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
   },
   ctaButton: {
-    marginTop: 2,
+    marginTop: 0,
   },
   footerRow: {
     flexDirection: 'row',

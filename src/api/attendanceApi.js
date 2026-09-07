@@ -87,4 +87,11 @@ export const attendanceApi = {
   getStats: async () => {
     return apiClient('/attendance/stats');
   },
+
+  /**
+   * Student-facing: fetch own attendance records for today + all-time recap totals (read-only)
+   */
+  getMyRecord: async () => {
+    return apiClient('/attendance/my-record');
+  },
 };

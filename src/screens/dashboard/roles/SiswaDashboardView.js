@@ -22,6 +22,7 @@ import { useAuth } from '../../../hooks/useAuth';
 import { useCanteen } from '../../../hooks/useCanteen';
 import { dashboardApi } from '../../../api/dashboardApi';
 import { courseApi } from '../../../api/courseApi';
+import { attendanceApi } from '../../../api/attendanceApi';
 import AppButton from '../../../components/common/AppButton';
 
 export default function SiswaDashboardView({
@@ -45,6 +46,10 @@ export default function SiswaDashboardView({
   const [aiQuestion, setAiQuestion] = useState('');
   const [aiAnswer, setAiAnswer] = useState(null);
   const [isAiAnswering, setIsAiAnswering] = useState(false);
+
+  const [showPresensiModal, setShowPresensiModal] = useState(false);
+  const [presensiData, setPresensiData] = useState(null);
+  const [isLoadingPresensi, setIsLoadingPresensi] = useState(false);
 
   const handleAskAi = (preset) => {
     const q = preset || aiQuestion;
@@ -75,6 +80,22 @@ export default function SiswaDashboardView({
   const [dashboardData, setDashboardData] = useState(null);
   const [allCourses, setAllCourses] = useState([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
+
+  const loadPresensiData = useCallback(async () => {
+    setIsLoadingPresensi(true);
+    try {
+      const res = await attendanceApi.getMyRecord().catch(() => null);
+      if (res?.success && res?.data) {
+        setPresensiData(res.data);
+      } else {
+        setPresensiData(null);
+      }
+    } catch (e) {
+      console.log('Error loading presensi data:', e);
+    } finally {
+      setIsLoadingPresensi(false);
+    }
+  }, []);
 
   const loadData = useCallback(async () => {
     try {
@@ -247,7 +268,7 @@ export default function SiswaDashboardView({
       title: 'E-Kantin',
       desc: 'Pesan jajan cepat',
       icon: 'restaurant-outline',
-      iconColor: theme.primary,
+      color: '#4F46E5',
       bgColor: isDark ? 'rgba(79, 70, 229, 0.15)' : '#EEF2FF',
       action: onNavigateToCanteen,
     },
@@ -257,7 +278,7 @@ export default function SiswaDashboardView({
       desc: `Rp ${wallet.balance.toLocaleString('id-ID')}`,
       descColor: '#10B981',
       icon: 'wallet-outline',
-      iconColor: '#10B981',
+      color: '#10B981',
       bgColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#ECFDF5',
       action: onNavigateToWallet,
     },
@@ -267,7 +288,7 @@ export default function SiswaDashboardView({
       desc: 'Tanya materi KBM',
       descColor: '#7C3AED',
       icon: 'sparkles-outline',
-      iconColor: '#7C3AED',
+      color: '#7C3AED',
       bgColor: isDark ? 'rgba(124, 58, 237, 0.15)' : '#F5F3FF',
       action: () => setShowAiModal(true),
     },
@@ -276,38 +297,22 @@ export default function SiswaDashboardView({
       title: 'Katalog Modul',
       desc: 'Eksplorasi materi',
       icon: 'library-outline',
-      iconColor: '#0284C7',
+      color: '#0284C7',
       bgColor: isDark ? 'rgba(2, 132, 199, 0.15)' : '#F0F9FF',
       action: onNavigateToCourseList,
     },
     {
       id: 'srv_presensi',
       title: 'Presensi KBM',
-      desc: 'Hadir • 06:48 WIB',
+      desc: 'Absensi Sesuai Kelas',
       descColor: '#F59E0B',
       icon: 'calendar-outline',
-      iconColor: '#F59E0B',
+      color: '#F59E0B',
       bgColor: isDark ? 'rgba(245, 158, 11, 0.15)' : '#FFFBEB',
-      action: () =>
-        onNavigateToAttendance
-          ? onNavigateToAttendance()
-          : Alert.alert(
-              'Status Presensi',
-              'Presensi Sekolah:\n• Status: Hadir\n• Jam Masuk: 06:48 WIB'
-            ),
-    },
-    {
-      id: 'srv_gps',
-      title: 'Presensi GPS',
-      desc: 'Geofencing Lokasi',
-      descColor: '#10B981',
-      icon: 'location-outline',
-      iconColor: '#10B981',
-      bgColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#ECFDF5',
-      action: () =>
-        onNavigateToLocationAttendance
-          ? onNavigateToLocationAttendance()
-          : Alert.alert('Presensi GPS', 'Membuka presensi lokasi...'),
+      action: () => {
+        setShowPresensiModal(true);
+        loadPresensiData();
+      },
     },
   ];
 
@@ -626,53 +631,148 @@ export default function SiswaDashboardView({
         </TouchableOpacity>
       </View>
 
-      {/* LAYANAN SISWA TERPADU (HORIZONTAL SCROLL) */}
+      {/* 3. LAYANAN SISWA TERPADU (2-COLUMN GRID - SERAGAM DENGAN ADMIN & KARYAWAN) */}
       <Text style={[styles.sectionHeading, { color: theme.textMuted }]}>
         LAYANAN SISWA TERPADU
       </Text>
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.servicesScrollContent}
-        style={styles.servicesScrollView}
-      >
-        {studentServices.map((srv) => (
+      {/* 4-card 2-column grid */}
+      <View style={styles.servicesGrid}>
+        {studentServices.filter((s) => s.id !== 'srv_presensi').map((srv) => (
           <TouchableOpacity
             key={srv.id}
             style={[
-              styles.serviceCardHorizontal,
+              styles.serviceCard,
               {
                 backgroundColor: theme.surface,
-                borderColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)',
+                borderColor: theme.border,
               },
             ]}
             onPress={srv.action}
-            activeOpacity={0.78}
+            activeOpacity={0.72}
           >
-            <View style={[styles.serviceIconWrap, { backgroundColor: srv.bgColor }]}>
-              <Ionicons name={srv.icon} size={20} color={srv.iconColor} />
+            <View
+              style={[
+                styles.serviceIconWrap,
+                { backgroundColor: srv.bgColor || theme.surfaceMuted },
+              ]}
+            >
+              <Ionicons name={srv.icon} size={22} color={srv.color || theme.primary} />
             </View>
-            <View style={styles.serviceTextStack}>
-              <Text
-                style={[styles.serviceTitle, { color: theme.textPrimary }]}
-                numberOfLines={1}
-              >
-                {srv.title}
-              </Text>
-              <Text
-                style={[
-                  styles.serviceDesc,
-                  { color: srv.descColor || theme.textMuted },
-                ]}
-                numberOfLines={1}
-              >
-                {srv.desc}
-              </Text>
-            </View>
+            <Text
+              style={[styles.serviceTitle, { color: theme.textPrimary }]}
+              numberOfLines={1}
+            >
+              {srv.title}
+            </Text>
+            <Text
+              style={[
+                styles.serviceDesc,
+                { color: srv.descColor || theme.textMuted },
+              ]}
+              numberOfLines={1}
+            >
+              {srv.desc}
+            </Text>
           </TouchableOpacity>
         ))}
-      </ScrollView>
+      </View>
+
+      {/* Presensi KBM — Full-Width Featured Card */}
+      {(() => {
+        const presensiSrv = studentServices.find((s) => s.id === 'srv_presensi');
+        if (!presensiSrv) return null;
+        return (
+          <TouchableOpacity
+            onPress={presensiSrv.action}
+            activeOpacity={0.8}
+            style={[
+              {
+                marginHorizontal: 16,
+                marginBottom: 8,
+                borderRadius: 16,
+                overflow: 'hidden',
+                borderWidth: 1,
+                borderColor: isDark ? 'rgba(245,158,11,0.3)' : 'rgba(245,158,11,0.4)',
+              },
+            ]}
+          >
+            <LinearGradient
+              colors={
+                isDark
+                  ? ['rgba(245,158,11,0.18)', 'rgba(30,27,20,0.9)']
+                  : ['#FFFBEB', '#FEF3C7']
+              }
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                paddingHorizontal: 16,
+                paddingVertical: 14,
+                gap: 14,
+              }}
+            >
+              {/* Left: Icon badge */}
+              <View
+                style={{
+                  width: 52,
+                  height: 52,
+                  borderRadius: 14,
+                  backgroundColor: '#F59E0B',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  shadowColor: '#F59E0B',
+                  shadowOffset: { width: 0, height: 4 },
+                  shadowOpacity: 0.35,
+                  shadowRadius: 8,
+                  elevation: 5,
+                }}
+              >
+                <Ionicons name="calendar" size={26} color="#FFF" />
+              </View>
+
+              {/* Middle: Text */}
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 2 }}>
+                  <Text style={{ color: isDark ? '#FFF' : '#1C1C1E', fontSize: 15, fontWeight: '700' }}>
+                    Presensi KBM
+                  </Text>
+                  <View
+                    style={{
+                      backgroundColor: '#F59E0B',
+                      borderRadius: 6,
+                      paddingHorizontal: 7,
+                      paddingVertical: 2,
+                    }}
+                  >
+                    <Text style={{ color: '#FFF', fontSize: 9, fontWeight: '800', letterSpacing: 0.6 }}>
+                      WAJIB HARIAN
+                    </Text>
+                  </View>
+                </View>
+                <Text style={{ color: isDark ? 'rgba(255,255,255,0.6)' : '#92400E', fontSize: 12 }}>
+                  Catat kehadiran sesuai kelas & jadwal KBM Anda
+                </Text>
+              </View>
+
+              {/* Right: Arrow */}
+              <View
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: 10,
+                  backgroundColor: isDark ? 'rgba(245,158,11,0.2)' : 'rgba(245,158,11,0.15)',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+              >
+                <Ionicons name="chevron-forward" size={18} color="#F59E0B" />
+              </View>
+            </LinearGradient>
+          </TouchableOpacity>
+        );
+      })()}
 
       {/* KURSUS AKTIF */}
       <View style={styles.sectionHeaderRow}>
@@ -805,6 +905,261 @@ export default function SiswaDashboardView({
           </React.Fragment>
         ))}
       </View>
+
+      {/* PRESENSI KBM MODAL */}
+      <Modal
+        visible={showPresensiModal}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowPresensiModal(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View
+            style={[
+              styles.modalSheet,
+              {
+                backgroundColor: theme.surface,
+                paddingBottom: safeBottomPadding,
+                maxHeight: '85%',
+              },
+            ]}
+          >
+            {/* Header */}
+            <View
+              style={{
+                marginBottom: 14,
+                paddingBottom: 12,
+                borderBottomWidth: StyleSheet.hairlineWidth,
+                borderBottomColor: theme.border,
+              }}
+            >
+              {/* Top Row: Title + Close Button */}
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <Text style={[styles.modalSheetTitle, { color: theme.textPrimary }]}>
+                    Presensi KBM Kelas
+                  </Text>
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.closeIconWrap, { backgroundColor: theme.surfaceMuted }]}
+                  onPress={() => setShowPresensiModal(false)}
+                >
+                  <Ionicons name="close" size={18} color={theme.textPrimary} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Sub Row: Date & Attendance Rate */}
+              {presensiData?.todayLabel ? (
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    marginTop: 10,
+                    paddingHorizontal: 2,
+                  }}
+                >
+                  <Text style={{ color: theme.textMuted, fontSize: 12, fontWeight: '600' }}>
+                    {presensiData.todayLabel}
+                  </Text>
+
+                  {presensiData.attendanceRate !== undefined ? (
+                    <View
+                      style={{
+                        backgroundColor: isDark ? 'rgba(245, 158, 11, 0.2)' : '#FEF3C7',
+                        paddingHorizontal: 8,
+                        paddingVertical: 3,
+                        borderRadius: 6,
+                        borderWidth: 1,
+                        borderColor: isDark ? 'rgba(245, 158, 11, 0.35)' : '#FDE68A',
+                      }}
+                    >
+                      <Text style={{ color: '#F59E0B', fontSize: 10.5, fontWeight: '800' }}>
+                        {presensiData.attendanceRate}% HADIR
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
+            </View>
+
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: 16 }}
+              bounces={false}
+            >
+              {isLoadingPresensi ? (
+                <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+                  <ActivityIndicator size="large" color="#F59E0B" />
+                  <Text style={[{ color: theme.textMuted, marginTop: 12, fontSize: 14 }]}>
+                    Memuat data presensi…
+                  </Text>
+                </View>
+              ) : presensiData ? (
+                <>
+
+                  {/* Today's Records */}
+                  <Text style={{ color: theme.textMuted, fontSize: 11, fontWeight: '700', letterSpacing: 0.6, marginBottom: 8 }}>
+                    PRESENSI HARI INI
+                  </Text>
+
+                  {presensiData.todayRecords && presensiData.todayRecords.length > 0 ? (
+                    presensiData.todayRecords.map((rec, idx) => (
+                      <View
+                        key={rec.id ?? idx}
+                        style={{
+                          backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#FAFAFA',
+                          borderRadius: 12,
+                          borderWidth: 1,
+                          borderColor: theme.border,
+                          padding: 12,
+                          marginBottom: 8,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 12,
+                        }}
+                      >
+                        {/* Status badge */}
+                        <View style={{
+                          width: 44,
+                          height: 44,
+                          borderRadius: 12,
+                          backgroundColor: `${rec.statusColor}18`,
+                          borderWidth: 1.5,
+                          borderColor: `${rec.statusColor}50`,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                        }}>
+                          <Text style={{ fontSize: 13, fontWeight: '800', color: rec.statusColor }}>
+                            {rec.status}
+                          </Text>
+                        </View>
+
+                        {/* Info */}
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ color: theme.textPrimary, fontSize: 14, fontWeight: '700' }} numberOfLines={1}>
+                            {rec.subject}
+                          </Text>
+                          <Text style={{ color: theme.textMuted, fontSize: 12, marginTop: 1 }}>
+                            {rec.period}{rec.timeSlot ? ` - ${rec.timeSlot}` : ''}{rec.className ? ` - ${rec.className}` : ''}
+                          </Text>
+                          {rec.notes ? (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 }}>
+                              <Ionicons name="information-circle-outline" size={12} color={theme.textMuted} />
+                              <Text style={{ color: theme.textMuted, fontSize: 11, fontStyle: 'italic', flex: 1 }} numberOfLines={1}>
+                                {rec.notes}
+                              </Text>
+                            </View>
+                          ) : null}
+                          {rec.teachingMaterial ? (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 }}>
+                              <Ionicons name="book-outline" size={12} color={isDark ? '#A5B4FC' : '#4F46E5'} />
+                              <Text style={{ color: isDark ? '#A5B4FC' : '#4F46E5', fontSize: 11, flex: 1 }} numberOfLines={1}>
+                                {rec.teachingMaterial}
+                              </Text>
+                            </View>
+                          ) : null}
+                        </View>
+
+                        {/* Status label */}
+                        <Text style={{ color: rec.statusColor, fontSize: 12, fontWeight: '700' }}>
+                          {rec.statusLabel}
+                        </Text>
+                      </View>
+                    ))
+                  ) : (
+                    <View style={{
+                      alignItems: 'center',
+                      paddingVertical: 20,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: theme.border,
+                      borderStyle: 'dashed',
+                      marginBottom: 8,
+                    }}>
+                      <Ionicons name="time-outline" size={28} color={theme.textMuted} />
+                      <Text style={{ color: theme.textMuted, fontSize: 13, marginTop: 6, textAlign: 'center' }}>
+                        Guru belum menginput presensi{'\n'}untuk hari ini.
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Rekap Total All-Time */}
+                  <Text style={{ color: theme.textMuted, fontSize: 11, fontWeight: '700', letterSpacing: 0.6, marginTop: 8, marginBottom: 10 }}>
+                    REKAP KEHADIRAN TOTAL
+                  </Text>
+
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 4 }}>
+                    {[
+                      { key: 'H', label: 'Hadir',     color: '#10B981', bg: isDark ? 'rgba(16,185,129,0.12)' : '#F0FDF4' },
+                      { key: 'S', label: 'Sakit',     color: '#3B82F6', bg: isDark ? 'rgba(59,130,246,0.12)' : '#EFF6FF' },
+                      { key: 'I', label: 'Izin',      color: '#8B5CF6', bg: isDark ? 'rgba(139,92,246,0.12)' : '#F5F3FF' },
+                      { key: 'A', label: 'Alpa',      color: '#EF4444', bg: isDark ? 'rgba(239,68,68,0.12)'  : '#FEF2F2' },
+                      { key: 'T', label: 'Terlambat', color: '#F59E0B', bg: isDark ? 'rgba(245,158,11,0.12)' : '#FFFBEB' },
+                      { key: 'B', label: 'Bolos',     color: '#DC2626', bg: isDark ? 'rgba(220,38,38,0.12)'  : '#FEF2F2' },
+                    ].map((item) => (
+                      <View
+                        key={item.key}
+                        style={{
+                          width: '30.5%',
+                          backgroundColor: item.bg,
+                          borderRadius: 12,
+                          borderWidth: 1,
+                          borderColor: `${item.color}30`,
+                          paddingVertical: 10,
+                          alignItems: 'center',
+                        }}
+                      >
+                        <Text style={{ color: item.color, fontSize: 20, fontWeight: '800' }}>
+                          {presensiData.recap?.[item.key] ?? 0}
+                        </Text>
+                        <Text style={{ color: theme.textMuted, fontSize: 11, marginTop: 2, fontWeight: '600' }}>
+                          {item.label}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+
+                  <Text style={{ color: theme.textMuted, fontSize: 11, textAlign: 'center', marginTop: 6 }}>
+                    Total {presensiData.grandTotal ?? 0} pertemuan tercatat
+                  </Text>
+                </>
+              ) : (
+                /* No data at all */
+                <View style={{ alignItems: 'center', paddingVertical: 36 }}>
+                  <View style={{
+                    width: 72, height: 72, borderRadius: 36,
+                    backgroundColor: isDark ? 'rgba(245,158,11,0.15)' : '#FFFBEB',
+                    alignItems: 'center', justifyContent: 'center', marginBottom: 14,
+                  }}>
+                    <Ionicons name="calendar-outline" size={36} color="#F59E0B" />
+                  </View>
+                  <Text style={{ color: theme.textPrimary, fontSize: 16, fontWeight: '700', textAlign: 'center' }}>
+                    Data Presensi Belum Tersedia
+                  </Text>
+                  <Text style={{ color: theme.textMuted, fontSize: 13, textAlign: 'center', marginTop: 6, lineHeight: 20 }}>
+                    Belum ada data presensi yang dicatat oleh guru untuk Anda.
+                  </Text>
+                </View>
+              )}
+
+              <AppButton
+                title="Tutup"
+                variant="outline"
+                onPress={() => setShowPresensiModal(false)}
+                style={{ marginTop: 12 }}
+              />
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
 
       {/* AI TUTOR MODAL */}
       <Modal
@@ -1387,50 +1742,34 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
-  servicesScrollView: {
-    marginHorizontal: -16,
+  servicesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
     marginBottom: 20,
   },
-  servicesScrollContent: {
-    paddingHorizontal: 16,
-    paddingVertical: 4,
-    gap: 10,
-  },
-  serviceCardHorizontal: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: 172,
-    borderRadius: 18,
+  serviceCard: {
+    width: '48.3%',
+    borderRadius: 16,
     borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 11,
-    shadowColor: '#1C2E5A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 2,
+    padding: 14,
   },
   serviceIconWrap: {
-    width: 42,
-    height: 42,
-    borderRadius: 13,
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  serviceTextStack: {
-    flex: 1,
-    marginLeft: 10,
-    justifyContent: 'center',
+    marginBottom: 10,
   },
   serviceTitle: {
     fontSize: 13,
     fontWeight: '700',
-    letterSpacing: -0.2,
     marginBottom: 2,
   },
   serviceDesc: {
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: '500',
   },
   coursesList: {
     gap: 12,
