@@ -34,6 +34,7 @@ import EkskulAttendanceScreen from '../screens/ekskul/EkskulAttendanceScreen';
 import LocationAttendanceScreen from '../screens/attendance/LocationAttendanceScreen';
 import NotificationScreen from '../screens/notification/NotificationScreen';
 import NotificationDetailScreen from '../screens/notification/NotificationDetailScreen';
+import SchoolBillingScreen from '../screens/billing/SchoolBillingScreen';
 
 function AnimatedScreenContainer({ routeKey, children }) {
   const fadeAnim = useRef(new Animated.Value(0.15)).current;
@@ -127,7 +128,8 @@ export default function RootNavigator() {
     currentRoute === ROUTES.MAIN.NOTIFICATIONS ||
     currentRoute === ROUTES.MAIN.NOTIFICATION_DETAIL ||
     currentRoute === ROUTES.MAIN.EKSKUL_ATTENDANCE ||
-    currentRoute === ROUTES.MAIN.LOCATION_ATTENDANCE;
+    currentRoute === ROUTES.MAIN.LOCATION_ATTENDANCE ||
+    currentRoute === ROUTES.MAIN.SCHOOL_BILLING;
 
   const showAppHeader =
     isAuthenticated &&
@@ -308,10 +310,20 @@ export default function RootNavigator() {
             onBack={() => setCurrentRoute(ROUTES.MAIN.NOTIFICATIONS)}
           />
         );
+      case ROUTES.MAIN.SCHOOL_BILLING:
+        return (
+          <SchoolBillingScreen
+            onBack={() => setCurrentRoute(ROUTES.MAIN.DASHBOARD)}
+            onNavigateToWallet={() => setCurrentRoute(ROUTES.MAIN.CANTEEN_WALLET)}
+          />
+        );
       case ROUTES.MAIN.DASHBOARD:
       default:
         return (
           <DashboardScreen
+            onNavigateToBilling={() =>
+              setCurrentRoute(ROUTES.MAIN.SCHOOL_BILLING)
+            }
             onNavigateToCanteen={() => setCurrentRoute(ROUTES.MAIN.CANTEEN_MENU)}
             onNavigateToWallet={() =>
               setCurrentRoute(ROUTES.MAIN.CANTEEN_WALLET)

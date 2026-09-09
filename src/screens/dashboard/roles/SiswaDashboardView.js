@@ -33,6 +33,7 @@ export default function SiswaDashboardView({
   onNavigateToCourseDetail,
   onNavigateToAttendance,
   onNavigateToLocationAttendance,
+  onNavigateToBilling,
 }) {
   const { theme, isDark } = useTheme();
   const { user } = useAuth();
@@ -42,30 +43,10 @@ export default function SiswaDashboardView({
   const safeBottomPadding = Math.max(insets.bottom || 0, 16) + 14;
 
   const [dailyRewardClaimed, setDailyRewardClaimed] = useState(false);
-  const [showAiModal, setShowAiModal] = useState(false);
-  const [aiQuestion, setAiQuestion] = useState('');
-  const [aiAnswer, setAiAnswer] = useState(null);
-  const [isAiAnswering, setIsAiAnswering] = useState(false);
 
   const [showPresensiModal, setShowPresensiModal] = useState(false);
   const [presensiData, setPresensiData] = useState(null);
   const [isLoadingPresensi, setIsLoadingPresensi] = useState(false);
-
-  const handleAskAi = (preset) => {
-    const q = preset || aiQuestion;
-    if (!q || !q.trim()) {
-      Alert.alert('Perhatian', 'Silakan ketik pertanyaan atau pilih topik yang ingin ditanyakan.');
-      return;
-    }
-    setIsAiAnswering(true);
-    setTimeout(() => {
-      setIsAiAnswering(false);
-      setAiAnswer({
-        question: q,
-        answer: `Penjelasan AI Tutor PedaGogi:\n\nUntuk pertanyaan "${q}", konsep utamanya dapat dipahami dengan memecah masalah menjadi langkah-langkah logis. Pelajari contoh latihan pada modul terkait dan pastikan memahami definisi dasarnya. Anda juga bisa mengulang kuis modul untuk menguji pemahaman.`,
-      });
-    }, 600);
-  };
 
   const [showLeaderboardModal, setShowLeaderboardModal] = useState(false);
   const [showCourseModal, setShowCourseModal] = useState(false);
@@ -252,10 +233,10 @@ export default function SiswaDashboardView({
       borderColor: 'rgba(16, 185, 129, 0.25)',
     },
     {
-      label: 'AI TOKENS',
-      value: dailyRewardClaimed ? '90' : '85',
-      sub: 'Tutor Aktif',
-      icon: 'sparkles',
+      label: 'STATUS KBM',
+      value: 'Aktif',
+      sub: 'Presensi Siswa',
+      icon: 'calendar',
       color: '#8B5CF6',
       lightTint: 'rgba(139, 92, 246, 0.07)',
       borderColor: 'rgba(139, 92, 246, 0.25)',
@@ -264,13 +245,13 @@ export default function SiswaDashboardView({
 
   const studentServices = [
     {
-      id: 'srv_canteen',
-      title: 'E-Kantin',
-      desc: 'Pesan jajan cepat',
-      icon: 'restaurant-outline',
+      id: 'srv_billing',
+      title: 'Tagihan Sekolah',
+      desc: 'SPP & Administrasi',
+      icon: 'card-outline',
       color: '#4F46E5',
       bgColor: isDark ? 'rgba(79, 70, 229, 0.15)' : '#EEF2FF',
-      action: onNavigateToCanteen,
+      action: onNavigateToBilling,
     },
     {
       id: 'srv_wallet',
@@ -281,25 +262,6 @@ export default function SiswaDashboardView({
       color: '#10B981',
       bgColor: isDark ? 'rgba(16, 185, 129, 0.15)' : '#ECFDF5',
       action: onNavigateToWallet,
-    },
-    {
-      id: 'srv_ai',
-      title: 'AI Study Tutor',
-      desc: 'Tanya materi KBM',
-      descColor: '#7C3AED',
-      icon: 'sparkles-outline',
-      color: '#7C3AED',
-      bgColor: isDark ? 'rgba(124, 58, 237, 0.15)' : '#F5F3FF',
-      action: () => setShowAiModal(true),
-    },
-    {
-      id: 'srv_course',
-      title: 'Katalog Modul',
-      desc: 'Eksplorasi materi',
-      icon: 'library-outline',
-      color: '#0284C7',
-      bgColor: isDark ? 'rgba(2, 132, 199, 0.15)' : '#F0F9FF',
-      action: onNavigateToCourseList,
     },
     {
       id: 'srv_presensi',
@@ -313,6 +275,15 @@ export default function SiswaDashboardView({
         setShowPresensiModal(true);
         loadPresensiData();
       },
+    },
+    {
+      id: 'srv_course',
+      title: 'Katalog Modul',
+      desc: 'Eksplorasi materi',
+      icon: 'library-outline',
+      color: '#0284C7',
+      bgColor: isDark ? 'rgba(2, 132, 199, 0.15)' : '#F0F9FF',
+      action: onNavigateToCourseList,
     },
   ];
 
@@ -638,7 +609,7 @@ export default function SiswaDashboardView({
 
       {/* 4-card 2-column grid */}
       <View style={styles.servicesGrid}>
-        {studentServices.filter((s) => s.id !== 'srv_presensi').map((srv) => (
+        {studentServices.map((srv) => (
           <TouchableOpacity
             key={srv.id}
             style={[
@@ -678,101 +649,6 @@ export default function SiswaDashboardView({
         ))}
       </View>
 
-      {/* Presensi KBM — Full-Width Featured Card */}
-      {(() => {
-        const presensiSrv = studentServices.find((s) => s.id === 'srv_presensi');
-        if (!presensiSrv) return null;
-        return (
-          <TouchableOpacity
-            onPress={presensiSrv.action}
-            activeOpacity={0.8}
-            style={[
-              {
-                marginHorizontal: 16,
-                marginBottom: 8,
-                borderRadius: 16,
-                overflow: 'hidden',
-                borderWidth: 1,
-                borderColor: isDark ? 'rgba(245,158,11,0.3)' : 'rgba(245,158,11,0.4)',
-              },
-            ]}
-          >
-            <LinearGradient
-              colors={
-                isDark
-                  ? ['rgba(245,158,11,0.18)', 'rgba(30,27,20,0.9)']
-                  : ['#FFFBEB', '#FEF3C7']
-              }
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                paddingHorizontal: 16,
-                paddingVertical: 14,
-                gap: 14,
-              }}
-            >
-              {/* Left: Icon badge */}
-              <View
-                style={{
-                  width: 52,
-                  height: 52,
-                  borderRadius: 14,
-                  backgroundColor: '#F59E0B',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  shadowColor: '#F59E0B',
-                  shadowOffset: { width: 0, height: 4 },
-                  shadowOpacity: 0.35,
-                  shadowRadius: 8,
-                  elevation: 5,
-                }}
-              >
-                <Ionicons name="calendar" size={26} color="#FFF" />
-              </View>
-
-              {/* Middle: Text */}
-              <View style={{ flex: 1 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 2 }}>
-                  <Text style={{ color: isDark ? '#FFF' : '#1C1C1E', fontSize: 15, fontWeight: '700' }}>
-                    Presensi KBM
-                  </Text>
-                  <View
-                    style={{
-                      backgroundColor: '#F59E0B',
-                      borderRadius: 6,
-                      paddingHorizontal: 7,
-                      paddingVertical: 2,
-                    }}
-                  >
-                    <Text style={{ color: '#FFF', fontSize: 9, fontWeight: '800', letterSpacing: 0.6 }}>
-                      WAJIB HARIAN
-                    </Text>
-                  </View>
-                </View>
-                <Text style={{ color: isDark ? 'rgba(255,255,255,0.6)' : '#92400E', fontSize: 12 }}>
-                  Catat kehadiran sesuai kelas & jadwal KBM Anda
-                </Text>
-              </View>
-
-              {/* Right: Arrow */}
-              <View
-                style={{
-                  width: 34,
-                  height: 34,
-                  borderRadius: 10,
-                  backgroundColor: isDark ? 'rgba(245,158,11,0.2)' : 'rgba(245,158,11,0.15)',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <Ionicons name="chevron-forward" size={18} color="#F59E0B" />
-              </View>
-            </LinearGradient>
-          </TouchableOpacity>
-        );
-      })()}
 
       {/* KURSUS AKTIF */}
       <View style={styles.sectionHeaderRow}>
@@ -1161,177 +1037,6 @@ export default function SiswaDashboardView({
         </View>
       </Modal>
 
-      {/* AI TUTOR MODAL */}
-      <Modal
-        visible={showAiModal}
-        animationType="slide"
-        transparent
-        onRequestClose={() => {
-          setShowAiModal(false);
-          setAiAnswer(null);
-          setAiQuestion('');
-        }}
-      >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.modalBackdrop}
-        >
-          <View
-            style={[
-              styles.modalSheet,
-              {
-                backgroundColor: theme.surface,
-                paddingBottom: safeBottomPadding,
-                maxHeight: '90%',
-              },
-            ]}
-          >
-            <View style={styles.modalSheetHeader}>
-              <View style={styles.aiModalTitleRow}>
-                <Ionicons name="sparkles" size={20} color="#7C3AED" />
-                <Text style={[styles.modalSheetTitle, { color: theme.textPrimary }]}>
-                  AI Study Tutor
-                </Text>
-              </View>
-              <TouchableOpacity
-                style={[styles.closeIconWrap, { backgroundColor: theme.surfaceMuted }]}
-                onPress={() => {
-                  setShowAiModal(false);
-                  setAiAnswer(null);
-                  setAiQuestion('');
-                }}
-              >
-                <Ionicons name="close" size={18} color={theme.textPrimary} />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingBottom: 16 }}
-              keyboardShouldPersistTaps="handled"
-              bounces={false}
-            >
-              <Text style={[styles.aiModalDesc, { color: theme.textSecondary }]}>
-                Tanyakan materi pelajaran, rumus, atau soal latihan kepada Asisten AI PedaGogi.
-              </Text>
-
-              {/* Preset Quick Question Chips */}
-              <Text style={[styles.aiPromptSectionLabel, { color: theme.textMuted }]}>
-                PERTANYAAN POPULER
-              </Text>
-              <View style={styles.aiChipsWrap}>
-                {[
-                  'Bantu jelaskan materi Algoritma',
-                  'Rumus penting & trik cepat kuis',
-                  'Rangkum materi KBM hari ini',
-                ].map((chip, i) => (
-                  <TouchableOpacity
-                    key={i}
-                    style={[
-                      styles.aiChipBtn,
-                      {
-                        backgroundColor: isDark
-                          ? 'rgba(124, 58, 237, 0.15)'
-                          : '#F5F3FF',
-                        borderColor: isDark ? '#7C3AED' : '#DDD6FE',
-                      },
-                    ]}
-                    onPress={() => {
-                      setAiQuestion(chip);
-                      handleAskAi(chip);
-                    }}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons
-                      name="chatbubble-ellipses-outline"
-                      size={14}
-                      color="#7C3AED"
-                    />
-                    <Text style={[styles.aiChipText, { color: theme.textPrimary }]}>
-                      {chip}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              {/* Input Box */}
-              <View
-                style={[
-                  styles.aiInputBox,
-                  {
-                    backgroundColor: theme.surfaceMuted,
-                    borderColor: theme.border,
-                  },
-                ]}
-              >
-                <TextInput
-                  style={[styles.aiTextInput, { color: theme.textPrimary }]}
-                  placeholder="Ketik pertanyaan atau topik materi KBM..."
-                  placeholderTextColor={theme.textMuted}
-                  value={aiQuestion}
-                  onChangeText={setAiQuestion}
-                  multiline
-                />
-                <TouchableOpacity
-                  style={[styles.aiSendBtn, { backgroundColor: '#7C3AED' }]}
-                  onPress={() => handleAskAi()}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="arrow-up" size={18} color="#FFFFFF" />
-                </TouchableOpacity>
-              </View>
-
-              {/* Loading Indicator */}
-              {isAiAnswering && (
-                <View style={styles.aiLoadingWrap}>
-                  <ActivityIndicator size="small" color="#7C3AED" />
-                  <Text style={[styles.aiLoadingText, { color: theme.textMuted }]}>
-                    AI sedang menganalisis materi...
-                  </Text>
-                </View>
-              )}
-
-              {/* Answer Card */}
-              {aiAnswer && !isAiAnswering && (
-                <View
-                  style={[
-                    styles.aiAnswerCard,
-                    {
-                      backgroundColor: isDark
-                        ? 'rgba(124, 58, 237, 0.12)'
-                        : '#F5F3FF',
-                      borderColor: 'rgba(124, 58, 237, 0.3)',
-                    },
-                  ]}
-                >
-                  <View style={styles.aiAnswerTop}>
-                    <Ionicons name="sparkles" size={16} color="#7C3AED" />
-                    <Text style={[styles.aiAnswerTitle, { color: '#7C3AED' }]}>
-                      Jawaban Tutor AI
-                    </Text>
-                  </View>
-                  <Text
-                    style={[styles.aiAnswerBody, { color: theme.textPrimary }]}
-                  >
-                    {aiAnswer.answer}
-                  </Text>
-                </View>
-              )}
-
-              <AppButton
-                title="Tutup AI Tutor"
-                variant="outline"
-                onPress={() => {
-                  setShowAiModal(false);
-                  setAiAnswer(null);
-                  setAiQuestion('');
-                }}
-                style={{ marginTop: 14 }}
-              />
-            </ScrollView>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
 
       {/* LEADERBOARD MODAL */}
       <Modal

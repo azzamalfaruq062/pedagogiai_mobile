@@ -40,12 +40,13 @@ export default function DevScreenSwitcher({ currentRoute, onSelectRoute }) {
       ],
     },
     {
-      title: 'E-Kantin Terpadu',
-      icon: 'restaurant-outline',
+      title: 'Keuangan & Tagihan Sekolah',
+      icon: 'cash-outline',
       items: [
-        { id: ROUTES.MAIN.CANTEEN_MENU, label: 'Menu Kantin', icon: 'restaurant-outline' },
-        { id: ROUTES.MAIN.CANTEEN_WALLET, label: 'Dompet & QR', icon: 'wallet-outline' },
-        { id: ROUTES.MAIN.CANTEEN_HISTORY, label: 'Riwayat Pesanan', icon: 'receipt-outline' },
+        { id: ROUTES.MAIN.SCHOOL_BILLING, label: 'Tagihan Sekolah (SPP, PPDB, Cicilan)', icon: 'card-outline' },
+        { id: ROUTES.MAIN.CANTEEN_WALLET, label: 'Dompet Digital Siswa', icon: 'wallet-outline' },
+        { id: ROUTES.MAIN.CANTEEN_MENU, label: 'Menu E-Kantin', icon: 'restaurant-outline' },
+        { id: ROUTES.MAIN.CANTEEN_HISTORY, label: 'Riwayat Pesanan Kantin', icon: 'receipt-outline' },
       ],
     },
     {

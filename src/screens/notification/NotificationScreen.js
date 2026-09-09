@@ -235,7 +235,6 @@ export default function NotificationScreen({ onBack, onOpenDetail }) {
             onPress={markAllAsRead}
             activeOpacity={0.7}
           >
-            <Ionicons name="checkmark-done" size={16} color="#6366F1" />
             <Text style={styles.markAllText}>Tandai Semua</Text>
           </TouchableOpacity>
         ) : (

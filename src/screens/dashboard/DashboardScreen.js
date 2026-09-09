@@ -25,6 +25,7 @@ export default function DashboardScreen({
   onNavigateToCourseDetail,
   onNavigateToAttendance,
   onNavigateToLocationAttendance,
+  onNavigateToBilling,
 }) {
   const insets = useSafeAreaInsets();
   const { theme } = useTheme();
@@ -114,6 +115,7 @@ export default function DashboardScreen({
             onNavigateToCourseDetail={onNavigateToCourseDetail}
             onNavigateToAttendance={onNavigateToAttendance}
             onNavigateToLocationAttendance={onNavigateToLocationAttendance}
+            onNavigateToBilling={onNavigateToBilling}
           />
         );
     }
