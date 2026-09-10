@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   StyleSheet,
   View,
@@ -6,6 +6,7 @@ import {
   Platform,
   Alert,
   Animated,
+  BackHandler,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { useTheme } from '../hooks/useTheme';
@@ -72,6 +73,14 @@ function AnimatedScreenContainer({ routeKey, children }) {
   );
 }
 
+// Routes yang dianggap sebagai "root" — back di sini akan keluar app
+const ROOT_ROUTES = new Set([
+  ROUTES.AUTH.LOGIN,
+  ROUTES.AUTH.REGISTER,
+  ROUTES.AUTH.ONBOARDING,
+  ROUTES.MAIN.DASHBOARD,
+]);
+
 export default function RootNavigator() {
   const { theme, isDark } = useTheme();
   const { isAuthenticated, isLoading } = useAuth();
@@ -86,6 +95,9 @@ export default function RootNavigator() {
   const [selectedQuizResult, setSelectedQuizResult] = useState(null);
   const [selectedSchedule, setSelectedSchedule] = useState(null);
   const [selectedNotification, setSelectedNotification] = useState(null);
+
+  // Navigation history stack untuk support back native
+  const navHistoryRef = useRef([]);
 
   // Strictly enforce authentication navigation state
   useEffect(() => {
@@ -139,7 +151,8 @@ export default function RootNavigator() {
 
   const showBottomBar = isAuthenticated && !isAuthScreen && !isImmersionScreen;
 
-  const handleSelectRoute = (route) => {
+  // Navigasi ke route baru — push ke history stack
+  const navigateTo = useCallback((route, stateSetter) => {
     if (
       !isAuthenticated &&
       route !== ROUTES.AUTH.LOGIN &&
@@ -151,10 +164,43 @@ export default function RootNavigator() {
         'Silakan login terlebih dahulu untuk mengakses menu ini.'
       );
       setCurrentRoute(ROUTES.AUTH.LOGIN);
+      navHistoryRef.current = [];
       return;
     }
+    // Jalankan setter state tambahan (misal: setSelectedCourse) sebelum pindah route
+    if (stateSetter) stateSetter();
+    // Push current route ke history sebelum berpindah
+    if (!ROOT_ROUTES.has(route)) {
+      navHistoryRef.current = [...navHistoryRef.current, currentRoute];
+    } else {
+      // Kalau tujuan adalah root route, reset history
+      navHistoryRef.current = [];
+    }
     setCurrentRoute(route);
-  };
+  }, [isAuthenticated, currentRoute]);
+
+  // Alias untuk tab bar (behaviour sama)
+  const handleSelectRoute = useCallback((route) => {
+    navigateTo(route);
+  }, [navigateTo]);
+
+  // Android hardware back handler
+  useEffect(() => {
+    const onBackPress = () => {
+      const history = navHistoryRef.current;
+      if (history.length > 0) {
+        const prevRoute = history[history.length - 1];
+        navHistoryRef.current = history.slice(0, -1);
+        setCurrentRoute(prevRoute);
+        return true; // cegah app keluar
+      }
+      // Tidak ada history — biarkan sistem (keluar app / minimize)
+      return false;
+    };
+
+    const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => subscription.remove();
+  }, []);
 
   const renderActiveScreen = () => {
     switch (currentRoute) {
@@ -181,16 +227,14 @@ export default function RootNavigator() {
       case ROUTES.MAIN.CANTEEN_MENU:
         return (
           <CanteenMenuScreen
-            onNavigateToWallet={() => setCurrentRoute(ROUTES.MAIN.CANTEEN_WALLET)}
+            onNavigateToWallet={() => navigateTo(ROUTES.MAIN.CANTEEN_WALLET)}
           />
         );
       case ROUTES.MAIN.CANTEEN_WALLET:
         return (
           <CanteenWalletScreen
-            onNavigateToMenu={() => setCurrentRoute(ROUTES.MAIN.CANTEEN_MENU)}
-            onNavigateToHistory={() =>
-              setCurrentRoute(ROUTES.MAIN.CANTEEN_HISTORY)
-            }
+            onNavigateToMenu={() => navigateTo(ROUTES.MAIN.CANTEEN_MENU)}
+            onNavigateToHistory={() => navigateTo(ROUTES.MAIN.CANTEEN_HISTORY)}
           />
         );
       case ROUTES.MAIN.CANTEEN_HISTORY:
@@ -198,31 +242,29 @@ export default function RootNavigator() {
       case ROUTES.MAIN.PROFILE:
         return (
           <ProfileSettingsScreen
-            onNavigateToCanteen={() => setCurrentRoute(ROUTES.MAIN.CANTEEN_MENU)}
-            onNavigateToWallet={() =>
-              setCurrentRoute(ROUTES.MAIN.CANTEEN_WALLET)
-            }
+            onNavigateToCanteen={() => navigateTo(ROUTES.MAIN.CANTEEN_MENU)}
+            onNavigateToWallet={() => navigateTo(ROUTES.MAIN.CANTEEN_WALLET)}
           />
         );
       case ROUTES.MAIN.COURSE_LIST:
         return (
           <CourseListScreen
             onNavigateToCourseDetail={(course) => {
-              setSelectedCourse(course);
-              setCurrentRoute(ROUTES.MAIN.COURSE_DETAIL);
+              navigateTo(ROUTES.MAIN.COURSE_DETAIL, () => setSelectedCourse(course));
             }}
-            onBack={() => setCurrentRoute(ROUTES.MAIN.DASHBOARD)}
+            onBack={() => navigateTo(ROUTES.MAIN.DASHBOARD)}
           />
         );
       case ROUTES.MAIN.COURSE_DETAIL:
         return (
           <CourseDetailScreen
             course={selectedCourse}
-            onBack={() => setCurrentRoute(ROUTES.MAIN.COURSE_LIST)}
+            onBack={() => navigateTo(ROUTES.MAIN.COURSE_LIST)}
             onStartLesson={(course, subChapter) => {
-              if (course) setSelectedCourse(course);
-              if (subChapter) setSelectedSubChapter(subChapter);
-              setCurrentRoute(ROUTES.MAIN.LESSON);
+              navigateTo(ROUTES.MAIN.LESSON, () => {
+                if (course) setSelectedCourse(course);
+                if (subChapter) setSelectedSubChapter(subChapter);
+              });
             }}
           />
         );
@@ -231,16 +273,15 @@ export default function RootNavigator() {
           <LessonScreen
             course={selectedCourse}
             subChapter={selectedSubChapter}
-            onBack={() => setCurrentRoute(ROUTES.MAIN.COURSE_DETAIL)}
+            onBack={() => navigateTo(ROUTES.MAIN.COURSE_DETAIL)}
             onStartQuiz={(quizData) => {
-              setSelectedQuiz(quizData);
-              setCurrentRoute(ROUTES.MAIN.QUIZ_ATTEMPT);
+              navigateTo(ROUTES.MAIN.QUIZ_ATTEMPT, () => setSelectedQuiz(quizData));
             }}
             onNavigateToNext={(nextSub) => {
               if (nextSub) {
                 setSelectedSubChapter(nextSub);
               } else {
-                setCurrentRoute(ROUTES.MAIN.COURSE_DETAIL);
+                navigateTo(ROUTES.MAIN.COURSE_DETAIL);
               }
             }}
             onSelectSubChapter={(sub) => {
@@ -254,10 +295,9 @@ export default function RootNavigator() {
             quiz={selectedQuiz}
             course={selectedCourse}
             subChapter={selectedSubChapter}
-            onBack={() => setCurrentRoute(ROUTES.MAIN.LESSON)}
+            onBack={() => navigateTo(ROUTES.MAIN.LESSON)}
             onSubmit={(resultData) => {
-              setSelectedQuizResult(resultData);
-              setCurrentRoute(ROUTES.MAIN.QUIZ_RESULT);
+              navigateTo(ROUTES.MAIN.QUIZ_RESULT, () => setSelectedQuizResult(resultData));
             }}
           />
         );
@@ -265,9 +305,9 @@ export default function RootNavigator() {
         return (
           <QuizResultScreen
             result={selectedQuizResult}
-            onBack={() => setCurrentRoute(ROUTES.MAIN.LESSON)}
-            onRetry={() => setCurrentRoute(ROUTES.MAIN.QUIZ_ATTEMPT)}
-            onContinue={() => setCurrentRoute(ROUTES.MAIN.LESSON)}
+            onBack={() => navigateTo(ROUTES.MAIN.LESSON)}
+            onRetry={() => navigateTo(ROUTES.MAIN.QUIZ_ATTEMPT)}
+            onContinue={() => navigateTo(ROUTES.MAIN.LESSON)}
           />
         );
       case ROUTES.MAIN.ATTENDANCE:
@@ -275,7 +315,7 @@ export default function RootNavigator() {
           <AttendanceJournalScreen
             onBack={() => {
               setSelectedSchedule(null);
-              setCurrentRoute(ROUTES.MAIN.DASHBOARD);
+              navigateTo(ROUTES.MAIN.DASHBOARD);
             }}
             schedule={selectedSchedule}
           />
@@ -283,23 +323,22 @@ export default function RootNavigator() {
       case ROUTES.MAIN.EKSKUL_ATTENDANCE:
         return (
           <EkskulAttendanceScreen
-            onBack={() => setCurrentRoute(ROUTES.MAIN.DASHBOARD)}
+            onBack={() => navigateTo(ROUTES.MAIN.DASHBOARD)}
             schedule={selectedSchedule}
           />
         );
       case ROUTES.MAIN.LOCATION_ATTENDANCE:
         return (
           <LocationAttendanceScreen
-            onBack={() => setCurrentRoute(ROUTES.MAIN.DASHBOARD)}
+            onBack={() => navigateTo(ROUTES.MAIN.DASHBOARD)}
           />
         );
       case ROUTES.MAIN.NOTIFICATIONS:
         return (
           <NotificationScreen
-            onBack={() => setCurrentRoute(ROUTES.MAIN.DASHBOARD)}
+            onBack={() => navigateTo(ROUTES.MAIN.DASHBOARD)}
             onOpenDetail={(notif) => {
-              setSelectedNotification(notif);
-              setCurrentRoute(ROUTES.MAIN.NOTIFICATION_DETAIL);
+              navigateTo(ROUTES.MAIN.NOTIFICATION_DETAIL, () => setSelectedNotification(notif));
             }}
           />
         );
@@ -307,45 +346,39 @@ export default function RootNavigator() {
         return (
           <NotificationDetailScreen
             notification={selectedNotification}
-            onBack={() => setCurrentRoute(ROUTES.MAIN.NOTIFICATIONS)}
+            onBack={() => navigateTo(ROUTES.MAIN.NOTIFICATIONS)}
           />
         );
       case ROUTES.MAIN.SCHOOL_BILLING:
         return (
           <SchoolBillingScreen
-            onBack={() => setCurrentRoute(ROUTES.MAIN.DASHBOARD)}
-            onNavigateToWallet={() => setCurrentRoute(ROUTES.MAIN.CANTEEN_WALLET)}
+            onNavigateToWallet={() => navigateTo(ROUTES.MAIN.CANTEEN_WALLET)}
           />
         );
       case ROUTES.MAIN.DASHBOARD:
       default:
         return (
           <DashboardScreen
-            onNavigateToBilling={() =>
-              setCurrentRoute(ROUTES.MAIN.SCHOOL_BILLING)
-            }
-            onNavigateToCanteen={() => setCurrentRoute(ROUTES.MAIN.CANTEEN_MENU)}
-            onNavigateToWallet={() =>
-              setCurrentRoute(ROUTES.MAIN.CANTEEN_WALLET)
-            }
-            onNavigateToProfile={() => setCurrentRoute(ROUTES.MAIN.PROFILE)}
-            onNavigateToCourseList={() => setCurrentRoute(ROUTES.MAIN.COURSE_LIST)}
+            onNavigateToBilling={() => navigateTo(ROUTES.MAIN.SCHOOL_BILLING)}
+            onNavigateToCanteen={() => navigateTo(ROUTES.MAIN.CANTEEN_MENU)}
+            onNavigateToWallet={() => navigateTo(ROUTES.MAIN.CANTEEN_WALLET)}
+            onNavigateToProfile={() => navigateTo(ROUTES.MAIN.PROFILE)}
+            onNavigateToCourseList={() => navigateTo(ROUTES.MAIN.COURSE_LIST)}
             onNavigateToCourseDetail={(course) => {
-              setSelectedCourse(course);
-              setCurrentRoute(ROUTES.MAIN.COURSE_DETAIL);
+              navigateTo(ROUTES.MAIN.COURSE_DETAIL, () => setSelectedCourse(course));
             }}
             onNavigateToAttendance={(sch) => {
-              setSelectedSchedule(sch || null);
+              const setter = () => setSelectedSchedule(sch || null);
               if (sch?.type === 'ekskul') {
-                setCurrentRoute(ROUTES.MAIN.EKSKUL_ATTENDANCE);
+                navigateTo(ROUTES.MAIN.EKSKUL_ATTENDANCE, setter);
               } else if (sch?.type === 'location') {
-                setCurrentRoute(ROUTES.MAIN.LOCATION_ATTENDANCE);
+                navigateTo(ROUTES.MAIN.LOCATION_ATTENDANCE, setter);
               } else {
-                setCurrentRoute(ROUTES.MAIN.ATTENDANCE);
+                navigateTo(ROUTES.MAIN.ATTENDANCE, setter);
               }
             }}
             onNavigateToLocationAttendance={() =>
-              setCurrentRoute(ROUTES.MAIN.LOCATION_ATTENDANCE)
+              navigateTo(ROUTES.MAIN.LOCATION_ATTENDANCE)
             }
           />
         );

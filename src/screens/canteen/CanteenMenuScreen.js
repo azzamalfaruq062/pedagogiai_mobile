@@ -32,8 +32,17 @@ export default function CanteenMenuScreen({ onNavigateToWallet }) {
     androidStatusBar,
     Platform.OS === 'android' ? 36 : 44
   );
+  // BottomTabBar height: 64 (glass bar) + dynamicPaddingBottom tabbar + paddingHorizontal wrapper
+  // Replicate same calculation as BottomTabBar for accurate positioning
+  const tabBarPaddingBottom = Platform.OS === 'ios'
+    ? Math.max(insets.bottom || 0, 8)
+    : Math.max(insets.bottom || 0, 12) + 16;
+  const TAB_BAR_HEIGHT = 64 + tabBarPaddingBottom; // total bottom tab bar footprint
+  const CART_BAR_BOTTOM_GAP = 22; // gap between cart bar and tab bar
+
   const dynamicPaddingTop = safeTop + 62;
-  const dynamicPaddingBottom = Math.max(insets.bottom || 0, 14) + 86;
+  // Give enough room at scroll bottom for both cart bar + tab bar
+  const dynamicPaddingBottom = TAB_BAR_HEIGHT + 64 + CART_BAR_BOTTOM_GAP;
 
   const {
     categories,
@@ -207,7 +216,7 @@ export default function CanteenMenuScreen({ onNavigateToWallet }) {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[
           styles.listContent,
-          { paddingBottom: dynamicPaddingBottom + (cartCount > 0 ? 56 : 16) },
+          { paddingBottom: dynamicPaddingBottom },
         ]}
         refreshControl={
           <RefreshControl
@@ -459,7 +468,7 @@ export default function CanteenMenuScreen({ onNavigateToWallet }) {
         <View
           style={[
             styles.floatingBarWrapper,
-            { bottom: dynamicPaddingBottom - 10 },
+            { bottom: TAB_BAR_HEIGHT + CART_BAR_BOTTOM_GAP },
           ]}
         >
           <TouchableOpacity
