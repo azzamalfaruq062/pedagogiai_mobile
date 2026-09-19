@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { CONFIG } from '../config';
 import { appStorage } from '../utils/storage';
 
@@ -31,10 +32,10 @@ export async function apiClient(endpoint, { body, token, ...customConfig } = {})
 
   const candidateBases = [
     CONFIG.API_BASE_URL,
-    'http://192.168.1.13:8000/api',
+    Platform.OS === 'ios' ? 'http://127.0.0.1:8000/api' : null,
+    Platform.OS === 'ios' ? 'http://localhost:8000/api' : null,
     CONFIG.FALLBACK_URL,
-    'http://10.0.2.2:8000/api',
-    'http://localhost:8000/api',
+    Platform.OS === 'android' ? 'http://10.0.2.2:8000/api' : null,
   ].filter(Boolean);
 
   const urlsToTry = Array.from(new Set(candidateBases)).map((base) => `${base}${endpoint}`);

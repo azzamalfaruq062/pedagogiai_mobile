@@ -61,7 +61,7 @@ export const AuthProvider = ({ children }) => {
   const login = async ({ email, password, rememberMe }) => {
     setIsLoading(true);
     try {
-      const res = await authApi.login({ email, password });
+      const res = await authApi.login({ email, password, nrs: email });
 
       if (res.success && res.data?.token) {
         const token = res.data.token;
@@ -97,7 +97,7 @@ export const AuthProvider = ({ children }) => {
 
       return {
         success: false,
-        message: res.message || 'Login gagal. Periksa kembali email dan password Anda.',
+        message: res.message || 'Login gagal. Periksa kembali email/NRS dan password Anda.',
       };
     } catch (error) {
       console.warn('[AuthContext] Login error:', error);

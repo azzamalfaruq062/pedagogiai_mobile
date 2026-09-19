@@ -9,6 +9,24 @@ export const validateEmail = (email) => {
   return null;
 };
 
+export const validateEmailOrNrs = (input) => {
+  if (!input || !input.trim()) {
+    return 'Email atau Nomor Registrasi (NRS) wajib diisi';
+  }
+  const trimmed = input.trim();
+  if (trimmed.includes('@')) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(trimmed)) {
+      return 'Format email tidak valid';
+    }
+  } else {
+    if (trimmed.length < 3) {
+      return 'NRS minimal 3 karakter';
+    }
+  }
+  return null;
+};
+
 export const validatePassword = (password, minLength = 6) => {
   if (!password) {
     return 'Kata sandi wajib diisi';

@@ -18,7 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AppInput from '../../components/common/AppInput';
 import AppButton from '../../components/common/AppButton';
 import SocialAuthOptions from '../../components/auth/SocialAuthOptions';
-import { validateEmail, validatePassword } from '../../utils/validation';
+import { validateEmailOrNrs, validatePassword } from '../../utils/validation';
 import { biometricService } from '../../services/biometricService';
 
 export default function LoginScreen({ onNavigateToRegister, onLoginSuccess }) {
@@ -120,7 +120,7 @@ export default function LoginScreen({ onNavigateToRegister, onLoginSuccess }) {
   };
 
   const handleLogin = async () => {
-    const emailError = validateEmail(email);
+    const emailError = validateEmailOrNrs(email);
     const passwordError = validatePassword(password, 4);
 
     if (emailError || passwordError) {
@@ -213,15 +213,16 @@ export default function LoginScreen({ onNavigateToRegister, onLoginSuccess }) {
       {/* ── Input Fields ── */}
       <View style={styles.formSection}>
         <AppInput
-          label="Alamat Email"
+          label="Email atau Nomor Registrasi (NRS)"
           value={email}
           onChangeText={(text) => {
             setEmail(text);
             if (errors.email) setErrors((prev) => ({ ...prev, email: null }));
           }}
-          placeholder="nama@sekolah.sch.id"
-          icon="mail-outline"
-          keyboardType="email-address"
+          placeholder="Email atau NRS (contoh: 2024001)"
+          icon="person-outline"
+          keyboardType="default"
+          autoCapitalize="none"
           error={errors.email}
         />
 

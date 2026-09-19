@@ -352,6 +352,7 @@ export default function RootNavigator() {
       case ROUTES.MAIN.SCHOOL_BILLING:
         return (
           <SchoolBillingScreen
+            onBack={() => navigateTo(ROUTES.MAIN.DASHBOARD)}
             onNavigateToWallet={() => navigateTo(ROUTES.MAIN.CANTEEN_WALLET)}
           />
         );
