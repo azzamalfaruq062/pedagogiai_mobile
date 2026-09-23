@@ -24,6 +24,7 @@ import { courseApi } from '../../../api/courseApi';
 import { CONFIG } from '../../../config';
 import { TeacherScheduleSkeleton } from '../../../components/common/SkeletonLoader';
 import AppButton from '../../../components/common/AppButton';
+import ServerConnectionError from '../../../components/common/ServerConnectionError';
 
 export default function GuruDashboardView({
   onNavigateToCourseList,
@@ -123,31 +124,51 @@ export default function GuruDashboardView({
   const [dashboardData, setDashboardData] = useState(null);
   const [courses, setCourses] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [connectionError, setConnectionError] = useState(null);
+
+  const load = async () => {
+    setIsLoading(true);
+    try {
+      const [sumRes, cRes] = await Promise.all([
+        dashboardApi.getSummary(),
+        courseApi.getMyCourses().catch(() => null),
+      ]);
+      if (sumRes?.success && sumRes.data) {
+        setConnectionError(null);
+        setDashboardData(sumRes.data);
+        if (Array.isArray(sumRes.data.courses) && sumRes.data.courses.length > 0) {
+          setCourses(sumRes.data.courses);
+        }
+      } else {
+        setConnectionError('Gagal terhubung ke server.');
+      }
+      if (cRes?.success && Array.isArray(cRes.data) && cRes.data.length > 0) {
+        setCourses(cRes.data);
+      }
+    } catch (err) {
+      console.log('Error loading guru dashboard data:', err);
+      setDashboardData(null);
+      setConnectionError(
+        err?.message || 'Gagal terhubung ke server.'
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    async function load() {
-      try {
-        const [sumRes, cRes] = await Promise.all([
-          dashboardApi.getSummary().catch(() => null),
-          courseApi.getMyCourses().catch(() => null),
-        ]);
-        if (sumRes?.success && sumRes.data) {
-          setDashboardData(sumRes.data);
-          if (Array.isArray(sumRes.data.courses) && sumRes.data.courses.length > 0) {
-            setCourses(sumRes.data.courses);
-          }
-        }
-        if (cRes?.success && Array.isArray(cRes.data) && cRes.data.length > 0) {
-          setCourses(cRes.data);
-        }
-      } catch (err) {
-        console.log('Error loading guru dashboard data:', err);
-      } finally {
-        setIsLoading(false);
-      }
-    }
     load();
   }, []);
+
+  if (connectionError) {
+    return (
+      <ServerConnectionError
+        onRetry={load}
+        isRetrying={isLoading}
+        errorMessage={connectionError}
+      />
+    );
+  }
 
   // State for Course Editing
   const [editingCourse, setEditingCourse] = useState(null);

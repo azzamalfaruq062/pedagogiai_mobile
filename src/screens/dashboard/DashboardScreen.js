@@ -129,6 +129,7 @@ export default function DashboardScreen({
         {
           paddingTop: dynamicPaddingTop,
           paddingBottom: dynamicPaddingBottom,
+          flexGrow: 1,
         },
       ]}
       showsVerticalScrollIndicator={false}

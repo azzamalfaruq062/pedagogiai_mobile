@@ -58,6 +58,27 @@ export const billingApi = {
   },
 
   /**
+   * Mendapatkan URL publik halaman Verifikasi Keabsahan Dokumen Kwitansi (UU ITE)
+   * Format sama dengan verifikasi surat resmi sekolah
+   * @param {string|number} idOrNomor
+   */
+  getInvoiceVerifyUrl: (idOrNomor) => {
+    const raw = CONFIG.API_BASE_URL || CONFIG.FALLBACK_URL || 'http://172.12.1.115:8000/api';
+    const baseUrl = raw.replace(/\/api\/?$/, '');
+    return `${baseUrl}/verifikasi-kwitansi/${encodeURIComponent(idOrNomor)}`;
+  },
+
+  /**
+   * Mendapatkan URL gambar QR Code resmi dari server lokal (dengan HTTP cache instan)
+   * Menghilangkan latency jaringan pihak ketiga sehingga QR code muncul langsung 0ms
+   * @param {string|number} idOrNomor
+   */
+  getInvoiceQrUrl: (idOrNomor) => {
+    const raw = CONFIG.API_BASE_URL || CONFIG.FALLBACK_URL || 'http://172.12.1.115:8000/api';
+    return `${raw}/billing/bills/${encodeURIComponent(idOrNomor)}/qr`;
+  },
+
+  /**
    * Mengambil daftar tahun ajaran yang tersedia
    */
   getAcademicYears: async () => {

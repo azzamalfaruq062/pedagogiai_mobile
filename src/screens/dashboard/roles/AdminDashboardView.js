@@ -19,6 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../../hooks/useTheme';
 import { dashboardApi } from '../../../api/dashboardApi';
 import AppButton from '../../../components/common/AppButton';
+import ServerConnectionError from '../../../components/common/ServerConnectionError';
 
 export default function AdminDashboardView({
   onNavigateToCourseList,
@@ -116,6 +117,7 @@ export default function AdminDashboardView({
   const [showAuditModal, setShowAuditModal] = useState(false);
   const [dashboardData, setDashboardData] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [connectionError, setConnectionError] = useState(null);
 
   // Broadcast Form State
   const [broadcastTitle, setBroadcastTitle] = useState('');
@@ -129,10 +131,17 @@ export default function AdminDashboardView({
       setIsLoading(true);
       const res = await dashboardApi.getSummary();
       if (res?.success && res.data) {
+        setConnectionError(null);
         setDashboardData(res.data);
+      } else {
+        setConnectionError('Gagal terhubung ke server.');
       }
     } catch (err) {
       console.log('Error loading admin summary:', err);
+      setDashboardData(null);
+      setConnectionError(
+        err?.message || 'Gagal terhubung ke server.'
+      );
     } finally {
       setIsLoading(false);
     }
@@ -141,6 +150,16 @@ export default function AdminDashboardView({
   useEffect(() => {
     loadSummary();
   }, []);
+
+  if (connectionError) {
+    return (
+      <ServerConnectionError
+        onRetry={loadSummary}
+        isRetrying={isLoading}
+        errorMessage={connectionError}
+      />
+    );
+  }
 
   const stats = dashboardData?.stats || {};
   const academicInfo = dashboardData?.academicInfo || 'Jadwal Master Aktif: Semester Genap • Status Server Normal';

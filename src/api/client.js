@@ -73,13 +73,14 @@ export async function apiClient(endpoint, { body, token, ...customConfig } = {})
     }
   }
 
-  return Promise.reject(
-    lastError?.name === 'AbortError'
-      ? { success: false, message: 'Koneksi ke server timeout (waktu habis).' }
-      : {
-          success: false,
-          message:
-            'Gagal terhubung ke server Laravel API. Pastikan server aktif di port 8000.',
-        }
-  );
+  const isTimeout = lastError?.name === 'AbortError';
+  return Promise.reject({
+    success: false,
+    isConnectionError: true,
+    isNetworkError: true,
+    targetUrl: CONFIG.API_BASE_URL,
+    message: isTimeout
+      ? 'Koneksi ke server waktu habis.'
+      : 'Gagal terhubung ke server.',
+  });
 }

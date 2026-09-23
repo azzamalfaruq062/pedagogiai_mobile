@@ -16,6 +16,7 @@ import { useTheme } from '../../../hooks/useTheme';
 import { useAuth } from '../../../hooks/useAuth';
 import { dashboardApi } from '../../../api/dashboardApi';
 import AppButton from '../../../components/common/AppButton';
+import ServerConnectionError from '../../../components/common/ServerConnectionError';
 
 export default function KaryawanDashboardView({
   onNavigateToCanteen,
@@ -112,20 +113,43 @@ export default function KaryawanDashboardView({
 
   const [showJournalModal, setShowJournalModal] = useState(false);
   const [dashboardData, setDashboardData] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [connectionError, setConnectionError] = useState(null);
+
+  const load = async () => {
+    setIsLoading(true);
+    try {
+      const res = await dashboardApi.getSummary();
+      if (res?.success && res.data) {
+        setConnectionError(null);
+        setDashboardData(res.data);
+      } else {
+        setConnectionError('Gagal terhubung ke server.');
+      }
+    } catch (err) {
+      console.log('Error loading karyawan summary:', err);
+      setDashboardData(null);
+      setConnectionError(
+        err?.message || 'Gagal terhubung ke server.'
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    async function load() {
-      try {
-        const res = await dashboardApi.getSummary();
-        if (res?.success && res.data) {
-          setDashboardData(res.data);
-        }
-      } catch (err) {
-        console.log('Error loading karyawan summary:', err);
-      }
-    }
     load();
   }, []);
+
+  if (connectionError) {
+    return (
+      <ServerConnectionError
+        onRetry={load}
+        isRetrying={isLoading}
+        errorMessage={connectionError}
+      />
+    );
+  }
 
   const [tasks, setTasks] = useState([
     { id: '1', title: 'Validasi berkas beasiswa 10 siswa baru', tag: 'DAPODIK', done: false, priority: 'Tinggi' },

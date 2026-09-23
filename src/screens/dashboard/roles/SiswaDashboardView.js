@@ -24,6 +24,7 @@ import { dashboardApi } from '../../../api/dashboardApi';
 import { courseApi } from '../../../api/courseApi';
 import { attendanceApi } from '../../../api/attendanceApi';
 import AppButton from '../../../components/common/AppButton';
+import ServerConnectionError from '../../../components/common/ServerConnectionError';
 
 export default function SiswaDashboardView({
   onNavigateToCanteen,
@@ -61,6 +62,7 @@ export default function SiswaDashboardView({
   const [dashboardData, setDashboardData] = useState(null);
   const [allCourses, setAllCourses] = useState([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
+  const [connectionError, setConnectionError] = useState(null);
 
   const loadPresensiData = useCallback(async () => {
     setIsLoadingPresensi(true);
@@ -79,19 +81,33 @@ export default function SiswaDashboardView({
   }, []);
 
   const loadData = useCallback(async () => {
+    setIsLoadingData(true);
     try {
       const [sumRes, coursesRes] = await Promise.all([
-        dashboardApi.getSummary().catch(() => null),
+        dashboardApi.getSummary(),
         courseApi.getCourses().catch(() => null),
       ]);
       if (sumRes?.success && sumRes?.data) {
+        setConnectionError(null);
         setDashboardData(sumRes.data);
+      } else if (sumRes?.data) {
+        setConnectionError(null);
+        setDashboardData(sumRes.data);
+      } else {
+        setDashboardData(null);
+        setConnectionError('Gagal terhubung ke server.');
       }
       if (coursesRes?.success && Array.isArray(coursesRes.data)) {
         setAllCourses(coursesRes.data);
+      } else {
+        setAllCourses([]);
       }
     } catch (e) {
       console.log('Error loading siswa dashboard data:', e);
+      setDashboardData(null);
+      setConnectionError(
+        e?.message || 'Gagal terhubung ke server.'
+      );
     } finally {
       setIsLoadingData(false);
     }
@@ -179,7 +195,7 @@ export default function SiswaDashboardView({
     extrapolate: 'clamp',
   });
 
-  const displayName = user?.name || wallet?.holderName || 'Ahmad Fauzi';
+  const displayName = user?.name || wallet?.holderName || 'Siswa';
   const firstName = displayName.split(' ')[0];
 
   const handleClaimReward = () => {
@@ -201,14 +217,26 @@ export default function SiswaDashboardView({
     }
   };
 
-  const currentLevel = dashboardData?.stats?.level || dashboardData?.user?.level || 'Lvl 1';
-  const currentExp = (dashboardData?.stats?.exp || 45) + (dailyRewardClaimed ? 50 : 0);
+  if (connectionError) {
+    return (
+      <ServerConnectionError
+        onRetry={loadData}
+        isRetrying={isLoadingData}
+        errorMessage={connectionError}
+      />
+    );
+  }
+
+  const currentLevel = dashboardData?.stats?.level || dashboardData?.user?.level || 'Level 1';
+  const currentExp = (dashboardData?.stats?.exp ?? 0) + (dailyRewardClaimed ? 50 : 0);
+  const targetExp = dashboardData?.stats?.targetExp || 5000;
+  const progressPercent = Math.min(100, Math.round((currentExp / targetExp) * 100));
 
   const studentStats = [
     {
       label: 'LEVEL SISWA',
       value: currentLevel,
-      sub: 'Peringkat 1',
+      sub: dashboardData?.stats?.rank ? `Peringkat ${dashboardData.stats.rank}` : 'Aktif',
       icon: 'trophy',
       color: '#4F46E5',
       lightTint: 'rgba(79, 70, 229, 0.07)',
@@ -540,7 +568,7 @@ export default function SiswaDashboardView({
                 Progres Level Belajar
               </Text>
               <Text style={[styles.statValueBold, { color: theme.textPrimary }]}>
-                Level 1 Siswa (Juara 2)
+                {currentLevel} {dashboardData?.stats?.rank ? `(Peringkat ${dashboardData.stats.rank})` : ''}
               </Text>
             </View>
           </View>
@@ -552,7 +580,7 @@ export default function SiswaDashboardView({
             <View style={styles.tokenPill}>
               <Ionicons name="sparkles" size={13} color="#6366F1" />
               <Text style={[styles.tokenValue, { color: theme.textPrimary }]}>
-                5.000 XP
+                {targetExp.toLocaleString('id-ID')} XP
               </Text>
             </View>
           </View>
@@ -560,10 +588,10 @@ export default function SiswaDashboardView({
 
         <View style={styles.xpRow}>
           <Text style={[styles.xpText, { color: theme.textMuted }]}>
-            {dailyRewardClaimed ? '4.550' : '4.500'} XP
+            {currentExp.toLocaleString('id-ID')} XP
           </Text>
           <Text style={[styles.xpText, { color: theme.textMuted }]}>
-            {dailyRewardClaimed ? '91%' : '90%'} Menuju Level 2
+            {progressPercent}% Menuju Level Berikutnya
           </Text>
         </View>
         <View style={[styles.progressTrack, { backgroundColor: theme.surfaceMuted }]}>
@@ -571,7 +599,7 @@ export default function SiswaDashboardView({
             style={[
               styles.progressFill,
               {
-                width: dailyRewardClaimed ? '91%' : '90%',
+                width: `${progressPercent}%`,
                 backgroundColor: '#1C2E5A',
               },
             ]}
@@ -671,66 +699,75 @@ export default function SiswaDashboardView({
       </View>
 
       <View style={styles.coursesList}>
-        {activeCourses.map((c) => (
-          <TouchableOpacity
-            key={c.id}
-            style={[
-              styles.courseCard,
-              { backgroundColor: theme.surface, borderColor: theme.border },
-            ]}
-            onPress={() => handleCoursePress(c)}
-            activeOpacity={0.88}
-          >
-            <View style={styles.courseHeader}>
-              <View style={[styles.courseIconBox, { backgroundColor: isDark ? theme.surfaceMuted : '#EEF2FF' }]}>
-                <Ionicons name={c.icon || 'school-outline'} size={20} color={c.accentColor || theme.primary} />
+        {activeCourses.length > 0 ? (
+          activeCourses.map((c) => (
+            <TouchableOpacity
+              key={c.id}
+              style={[
+                styles.courseCard,
+                { backgroundColor: theme.surface, borderColor: theme.border },
+              ]}
+              onPress={() => handleCoursePress(c)}
+              activeOpacity={0.88}
+            >
+              <View style={styles.courseHeader}>
+                <View style={[styles.courseIconBox, { backgroundColor: isDark ? theme.surfaceMuted : '#EEF2FF' }]}>
+                  <Ionicons name={c.icon || 'school-outline'} size={20} color={c.accentColor || theme.primary} />
+                </View>
+                <View style={styles.courseMetaCol}>
+                  <Text
+                    style={[styles.courseTitle, { color: theme.textPrimary }]}
+                    numberOfLines={1}
+                  >
+                    {c.title}
+                  </Text>
+                  <Text style={[styles.courseCategory, { color: theme.textMuted }]}>
+                    {c.category} • {c.subChaptersCount ? `${c.subChaptersCount} Materi` : (c.duration || 'Fleksibel')}
+                  </Text>
+                </View>
               </View>
-              <View style={styles.courseMetaCol}>
-                <Text
-                  style={[styles.courseTitle, { color: theme.textPrimary }]}
-                  numberOfLines={1}
-                >
-                  {c.title}
+
+              <Text style={[styles.chapterText, { color: theme.textSecondary }]} numberOfLines={1}>
+                {c.currentChapter || c.chapter || 'Mulai Belajar'}
+              </Text>
+
+              <View style={styles.courseProgressRow}>
+                <Text style={[styles.progressLabel, { color: theme.textMuted }]}>
+                  Progres Belajar
                 </Text>
-                <Text style={[styles.courseCategory, { color: theme.textMuted }]}>
-                  {c.category} • {c.subChaptersCount ? `${c.subChaptersCount} Materi` : (c.duration || 'Fleksibel')}
+                <Text style={[styles.progressVal, { color: theme.textPrimary }]}>
+                  {c.progress || 0}%
                 </Text>
               </View>
-            </View>
+              <View style={[styles.courseProgressTrack, { backgroundColor: theme.surfaceMuted }]}>
+                <View
+                  style={[
+                    styles.courseProgressFill,
+                    { width: `${c.progress || 0}%`, backgroundColor: c.accentColor || theme.primary },
+                  ]}
+                />
+              </View>
 
-            <Text style={[styles.chapterText, { color: theme.textSecondary }]} numberOfLines={1}>
-              {c.currentChapter || c.chapter || 'Mulai Belajar'}
-            </Text>
-
-            <View style={styles.courseProgressRow}>
-              <Text style={[styles.progressLabel, { color: theme.textMuted }]}>
-                Progres Belajar
-              </Text>
-              <Text style={[styles.progressVal, { color: theme.textPrimary }]}>
-                {c.progress}%
-              </Text>
-            </View>
-            <View style={[styles.courseProgressTrack, { backgroundColor: theme.surfaceMuted }]}>
               <View
                 style={[
-                  styles.courseProgressFill,
-                  { width: `${c.progress}%`, backgroundColor: c.accentColor || theme.primary },
+                  styles.courseCtaBtn,
+                  { backgroundColor: isDark ? '#1C2346' : '#EEF2FF' },
                 ]}
-              />
-            </View>
-
-            <View
-              style={[
-                styles.courseCtaBtn,
-                { backgroundColor: isDark ? '#1C2346' : '#EEF2FF' },
-              ]}
-            >
-              <Text style={[styles.courseCtaText, { color: c.accentColor || theme.primary }]}>
-                Lanjutkan Belajar →
-              </Text>
-            </View>
-          </TouchableOpacity>
-        ))}
+              >
+                <Text style={[styles.courseCtaText, { color: c.accentColor || theme.primary }]}>
+                  Lanjutkan Belajar →
+                </Text>
+              </View>
+            </TouchableOpacity>
+          ))
+        ) : (
+          <View style={[styles.courseCard, { backgroundColor: theme.surface, borderColor: theme.border, paddingVertical: 24, alignItems: 'center' }]}>
+            <Ionicons name="library-outline" size={28} color={theme.textMuted} />
+            <Text style={{ color: theme.textMuted, marginTop: 8, fontSize: 13 }}>
+              Belum ada kursus aktif yang terdaftar.
+            </Text>
+          </View>
+        )}
       </View>
 
       {/* LEADERBOARD PREVIEW */}
@@ -751,35 +788,40 @@ export default function SiswaDashboardView({
           { backgroundColor: theme.surface, borderColor: theme.border },
         ]}
       >
-        {(dashboardData?.leaderboard || [
-          { rank: 1, name: 'Ahmad S.', points: 5200 },
-          { rank: 2, name: `${firstName} (Kamu)`, points: currentExp, isCurrentUser: true },
-          { rank: 3, name: 'Citra W.', points: 4100 },
-        ]).map((item, idx, arr) => (
-          <React.Fragment key={item.id || idx}>
-            <View
-              style={[
-                styles.leaderboardRow,
-                item.isCurrentUser && {
-                  backgroundColor: isDark ? '#162238' : '#EEF2FF',
-                  borderRadius: 10,
-                  paddingHorizontal: 8,
-                },
-              ]}
-            >
-              <View style={[styles.rankNumberCircle, { backgroundColor: item.rank === 1 ? '#1C2E5A' : item.isCurrentUser ? '#4F46E5' : theme.surfaceMuted }]}>
-                <Text style={item.rank <= 2 ? styles.rankNumberTextWhite : [styles.rankNumberText, { color: theme.textMuted }]}>{item.rank}</Text>
+        {Array.isArray(dashboardData?.leaderboard) && dashboardData.leaderboard.length > 0 ? (
+          dashboardData.leaderboard.map((item, idx, arr) => (
+            <React.Fragment key={item.id || idx}>
+              <View
+                style={[
+                  styles.leaderboardRow,
+                  item.isCurrentUser && {
+                    backgroundColor: isDark ? '#162238' : '#EEF2FF',
+                    borderRadius: 10,
+                    paddingHorizontal: 8,
+                  },
+                ]}
+              >
+                <View style={[styles.rankNumberCircle, { backgroundColor: item.rank === 1 ? '#1C2E5A' : item.isCurrentUser ? '#4F46E5' : theme.surfaceMuted }]}>
+                  <Text style={item.rank <= 2 ? styles.rankNumberTextWhite : [styles.rankNumberText, { color: theme.textMuted }]}>{item.rank}</Text>
+                </View>
+                <Text style={[styles.leaderName, { color: theme.textPrimary, fontWeight: item.isCurrentUser ? '700' : '500' }]}>
+                  {item.name}
+                </Text>
+                <Text style={[styles.leaderXp, { color: item.isCurrentUser ? theme.primary : '#10B981', fontWeight: item.isCurrentUser ? '700' : '600' }]}>
+                  {item.points} XP
+                </Text>
               </View>
-              <Text style={[styles.leaderName, { color: theme.textPrimary, fontWeight: item.isCurrentUser ? '700' : '500' }]}>
-                {item.name}
-              </Text>
-              <Text style={[styles.leaderXp, { color: item.isCurrentUser ? theme.primary : '#10B981', fontWeight: item.isCurrentUser ? '700' : '600' }]}>
-                {item.points} XP
-              </Text>
-            </View>
-            {idx < arr.length - 1 && <View style={[styles.leaderDivider, { backgroundColor: theme.border }]} />}
-          </React.Fragment>
-        ))}
+              {idx < arr.length - 1 && <View style={[styles.leaderDivider, { backgroundColor: theme.border }]} />}
+            </React.Fragment>
+          ))
+        ) : (
+          <View style={{ paddingVertical: 20, alignItems: 'center' }}>
+            <Ionicons name="trophy-outline" size={26} color={theme.textMuted} />
+            <Text style={{ color: theme.textMuted, fontSize: 13, marginTop: 6 }}>
+              Belum ada data leaderboard kelas dari server.
+            </Text>
+          </View>
+        )}
       </View>
 
       {/* PRESENSI KBM MODAL */}

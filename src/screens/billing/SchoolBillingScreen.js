@@ -28,24 +28,26 @@ import { useAuth } from '../../hooks/useAuth';
 import { billingApi } from '../../api/billingApi';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const BILLS_CACHE_KEY = '@billing_cache_v1';
+import ServerConnectionError from '../../components/common/ServerConnectionError';
+
+const BILLS_CACHE_KEY = '@billing_cache_v2';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // ─────────────────────────────────────────────────────────────────────────────
-// DATA METADATA & STATIC MOCK DATA (GAYA EDUPAY MODERN)
+// DATA METADATA & DEFAULT STATE
 // ─────────────────────────────────────────────────────────────────────────────
 const STUDENT_DATA = {
-  name: 'M. Rayhan Pratama',
-  fullName: 'Muhammad Rayhan Pratama',
-  nisn: '0084729103',
-  nisnAlt: '0064821940',
-  className: 'XII MIPA 1',
-  classAlt: 'Kelas XI IPA 2',
-  schoolName: 'SMA Nusantara 01 Jakarta',
-  academicYear: '2024/2025',
-  semester: 'Semester Ganjil TA 2024/2025',
-  avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=150&auto=format&fit=crop&q=80',
+  name: 'Siswa',
+  fullName: 'Siswa',
+  nisn: '-',
+  nisnAlt: '-',
+  className: '-',
+  classAlt: '-',
+  schoolName: 'Sekolah',
+  academicYear: '-',
+  semester: '-',
+  avatarUrl: null,
 };
 
 // Partikel Confetti & Sparkles untuk Animasi Sukses Menuju Kwitansi (Palet Fintech Hijau & Modern)
@@ -66,68 +68,7 @@ const CELEBRATION_PARTICLES = [
   { id: 14, angle: 325, distance: 88, color: '#10B981', size: 6, shape: 'sparkle' },
 ];
 
-const INITIAL_BILLS_DATA = [
-  {
-    id: 'bill-spp-nov',
-    title: 'SPP Bulan November 2024',
-    subtitle: 'Wajib Bulanan • Tenggat 10 Nov 2024',
-    subDetails: 'Biaya Pembelajaran Reguler',
-    amount: 450000,
-    checkoutAmount: 450000,
-    isMandatory: true,
-    isSelected: true,
-    qty: 1,
-    iconName: 'calendar-outline',
-    iconBg: '#EEF2FF',
-    iconColor: '#4F46E5',
-    category: 'spp',
-    categoryLabel: 'SPP & Bulanan',
-    dueDate: '10 Nov 2024',
-    status: 'unpaid',
-    kode_biller: '1530',
-    nomor_pembayaran: '1124118921',
-  },
-  {
-    id: 'bill-spp-des',
-    title: 'SPP Bulan Desember 2024',
-    subtitle: 'Wajib Bulanan • Tenggat 10 Des 2024',
-    subDetails: 'Biaya Pembelajaran Reguler',
-    amount: 450000,
-    checkoutAmount: 450000,
-    isMandatory: true,
-    isSelected: false,
-    qty: 1,
-    iconName: 'calendar-outline',
-    iconBg: '#EEF2FF',
-    iconColor: '#4F46E5',
-    category: 'spp',
-    categoryLabel: 'SPP & Bulanan',
-    dueDate: '10 Des 2024',
-    status: 'unpaid',
-    kode_biller: '1530',
-    nomor_pembayaran: '1124128922',
-  },
-  {
-    id: 'bill-uas-ganjil',
-    title: 'Ujian Akhir Semester (UAS)',
-    subtitle: 'UAS Ganjil • Tenggat 25 Nov 2024',
-    subDetails: 'Praktikum & CBT System',
-    amount: 700000,
-    checkoutAmount: 700000,
-    isMandatory: true,
-    isSelected: false,
-    qty: 1,
-    iconName: 'document-text-outline',
-    iconBg: '#FEF3C7',
-    iconColor: '#D97706',
-    category: 'ujian',
-    categoryLabel: 'Ujian & Akademik',
-    dueDate: '25 Nov 2024',
-    status: 'unpaid',
-    kode_biller: '1530',
-    nomor_pembayaran: '1224118923',
-  },
-];
+const INITIAL_BILLS_DATA = [];
 
 const PAYMENT_LOGOS = {
   bca_va: require('../../../assets/payment/bca-bank-central-asia-logo-svgrepo-com.png'),
@@ -146,259 +87,9 @@ const PAYMENT_LOGOS = {
   alfamart: require('../../../assets/payment/Alfamart Logo - Colored - zonalogo.com.png'),
 };
 
-const ALL_BILLS_CATEGORIES = [
-  { id: 'all', label: 'Semua (12)' },
-  { id: 'spp', label: 'SPP & Bulanan (5)' },
-  { id: 'ujian', label: 'Ujian & CBT (2)' },
-  { id: 'buku', label: 'Buku & Modul (2)' },
-  { id: 'kegiatan', label: 'Kegiatan Siswa (2)' },
-  { id: 'sarana', label: 'Seragam & Sarana (1)' },
-];
+const ALL_BILLS_CATEGORIES = [{ id: 'all', label: 'Semua' }];
 
-const ALL_STUDENT_BILLS_DATA = [
-  // ─── 1. SPP & BIAYA BULANAN ──────────────────────────────────────
-  {
-    id: 'bill-spp-nov',
-    title: 'SPP Bulan November 2024',
-    subtitle: 'Wajib Bulanan • Tenggat 10 Nov 2024',
-    amount: 450000,
-    category: 'spp',
-    categoryLabel: 'SPP & Bulanan',
-    dueDate: '10 Nov 2024',
-    status: 'unpaid',
-    iconName: 'calendar-outline',
-    iconBg: '#EEF2FF',
-    iconColor: '#4F46E5',
-  },
-  {
-    id: 'bill-spp-des',
-    title: 'SPP Bulan Desember 2024',
-    subtitle: 'Wajib Bulanan • Tenggat 10 Des 2024',
-    amount: 450000,
-    category: 'spp',
-    categoryLabel: 'SPP & Bulanan',
-    dueDate: '10 Des 2024',
-    status: 'unpaid',
-    iconName: 'calendar-outline',
-    iconBg: '#EEF2FF',
-    iconColor: '#4F46E5',
-  },
-  {
-    id: 'bill-spp-okt',
-    title: 'SPP Bulan Oktober 2024',
-    subtitle: 'Wajib Bulanan • Lunas 08 Okt 2024',
-    amount: 450000,
-    category: 'spp',
-    categoryLabel: 'SPP & Bulanan',
-    dueDate: '10 Okt 2024',
-    status: 'paid',
-    paidAt: '08 Okt 2024, 10:15 WIB',
-    iconName: 'calendar-outline',
-    iconBg: '#ECFDF5',
-    iconColor: '#059669',
-    invoice: {
-      invoiceNo: 'INV/20241008/SPP-X10/4821',
-      paidAt: '08 Okt 2024, 10:15 WIB',
-      paymentMethod: 'BCA Virtual Account',
-      paymentLogo: PAYMENT_LOGOS.bca_va,
-      transactionId: 'EDP-TRX-20241008-8831',
-      baseAmount: 450000,
-      adminFee: 2500,
-      totalAmount: 452500,
-    },
-  },
-  {
-    id: 'bill-spp-sep',
-    title: 'SPP Bulan September 2024',
-    subtitle: 'Wajib Bulanan • Lunas 05 Sep 2024',
-    amount: 450000,
-    category: 'spp',
-    categoryLabel: 'SPP & Bulanan',
-    dueDate: '10 Sep 2024',
-    status: 'paid',
-    paidAt: '05 Sep 2024, 14:22 WIB',
-    iconName: 'calendar-outline',
-    iconBg: '#ECFDF5',
-    iconColor: '#059669',
-    invoice: {
-      invoiceNo: 'INV/20240905/SPP-X09/3910',
-      paidAt: '05 Sep 2024, 14:22 WIB',
-      paymentMethod: 'Bank Mandiri Virtual Account',
-      paymentLogo: PAYMENT_LOGOS.mandiri_va,
-      transactionId: 'EDP-TRX-20240905-1940',
-      baseAmount: 450000,
-      adminFee: 2500,
-      totalAmount: 452500,
-    },
-  },
-  {
-    id: 'bill-spp-agu',
-    title: 'SPP Bulan Agustus 2024',
-    subtitle: 'Wajib Bulanan • Lunas 09 Agu 2024',
-    amount: 450000,
-    category: 'spp',
-    categoryLabel: 'SPP & Bulanan',
-    dueDate: '10 Agu 2024',
-    status: 'paid',
-    paidAt: '09 Agu 2024, 09:30 WIB',
-    iconName: 'calendar-outline',
-    iconBg: '#ECFDF5',
-    iconColor: '#059669',
-    invoice: {
-      invoiceNo: 'INV/20240809/SPP-X08/1129',
-      paidAt: '09 Agu 2024, 09:30 WIB',
-      paymentMethod: 'QRIS Dinamis Instan',
-      paymentLogo: PAYMENT_LOGOS.qris,
-      transactionId: 'EDP-TRX-20240809-5512',
-      baseAmount: 450000,
-      adminFee: 1000,
-      totalAmount: 451000,
-    },
-  },
-
-  // ─── 2. UJIAN & AKADEMIK ─────────────────────────────────────────
-  {
-    id: 'bill-uas-ganjil',
-    title: 'Ujian Akhir Semester (UAS)',
-    subtitle: 'UAS Ganjil • Tenggat 25 Nov 2024',
-    amount: 700000,
-    category: 'ujian',
-    categoryLabel: 'Ujian & Akademik',
-    dueDate: '25 Nov 2024',
-    status: 'unpaid',
-    iconName: 'document-text-outline',
-    iconBg: '#FEF3C7',
-    iconColor: '#D97706',
-  },
-  {
-    id: 'bill-uts-ganjil',
-    title: 'Ujian Tengah Semester (UTS)',
-    subtitle: 'UTS Ganjil • Lunas 20 Sep 2024',
-    amount: 350000,
-    category: 'ujian',
-    categoryLabel: 'Ujian & Akademik',
-    dueDate: '20 Sep 2024',
-    status: 'paid',
-    paidAt: '20 Sep 2024, 11:05 WIB',
-    iconName: 'document-text-outline',
-    iconBg: '#ECFDF5',
-    iconColor: '#059669',
-    invoice: {
-      invoiceNo: 'INV/20240920/UTS-01/5921',
-      paidAt: '20 Sep 2024, 11:05 WIB',
-      paymentMethod: 'BCA Virtual Account',
-      paymentLogo: PAYMENT_LOGOS.bca_va,
-      transactionId: 'EDP-TRX-20240920-7731',
-      baseAmount: 350000,
-      adminFee: 2500,
-      totalAmount: 352500,
-    },
-  },
-
-  // ─── 3. BUKU & MODUL BELAJAR ─────────────────────────────────────
-  {
-    id: 'bill-modul-buku',
-    title: 'Buku Modul & Praktikum Terapan',
-    subtitle: 'Fisika & Kimia • Tenggat 15 Des 2024',
-    amount: 150000,
-    category: 'buku',
-    categoryLabel: 'Buku & Modul',
-    dueDate: '15 Des 2024',
-    status: 'unpaid',
-    iconName: 'book-outline',
-    iconBg: '#EFF6FF',
-    iconColor: '#2563EB',
-  },
-  {
-    id: 'bill-buku-merdeka',
-    title: 'Paket Buku Kurikulum Merdeka',
-    subtitle: 'Semester Ganjil • Lunas 15 Jul 2024',
-    amount: 380000,
-    category: 'buku',
-    categoryLabel: 'Buku & Modul',
-    dueDate: '15 Jul 2024',
-    status: 'paid',
-    paidAt: '15 Jul 2024, 08:45 WIB',
-    iconName: 'book-outline',
-    iconBg: '#ECFDF5',
-    iconColor: '#059669',
-    invoice: {
-      invoiceNo: 'INV/20240715/BKP-78/9012',
-      paidAt: '15 Jul 2024, 08:45 WIB',
-      paymentMethod: 'Bank Negara Indonesia (BNI) VA',
-      paymentLogo: PAYMENT_LOGOS.bni_va,
-      transactionId: 'EDP-TRX-20240715-0921',
-      baseAmount: 380000,
-      adminFee: 2500,
-      totalAmount: 382500,
-    },
-  },
-
-  // ─── 4. KEGIATAN & EKSTRAKURIKULER ───────────────────────────────
-  {
-    id: 'bill-studi-lapangan',
-    title: 'Study Tour & Kunjungan Industri',
-    subtitle: 'Kunjungan Edukatif • Tenggat 20 Des 2024',
-    amount: 650000,
-    category: 'kegiatan',
-    categoryLabel: 'Kegiatan Siswa',
-    dueDate: '20 Des 2024',
-    status: 'unpaid',
-    iconName: 'compass-outline',
-    iconBg: '#FDF4FF',
-    iconColor: '#A855F7',
-  },
-  {
-    id: 'bill-ekskul-pramuka',
-    title: 'Iuran Pramuka & Kemah LDKS',
-    subtitle: 'Semester Ganjil • Lunas 12 Agu 2024',
-    amount: 200000,
-    category: 'kegiatan',
-    categoryLabel: 'Kegiatan Siswa',
-    dueDate: '12 Agu 2024',
-    status: 'paid',
-    paidAt: '12 Agu 2024, 16:10 WIB',
-    iconName: 'flag-outline',
-    iconBg: '#ECFDF5',
-    iconColor: '#059669',
-    invoice: {
-      invoiceNo: 'INV/20240812/EKS-02/3381',
-      paidAt: '12 Agu 2024, 16:10 WIB',
-      paymentMethod: 'GoPay',
-      paymentLogo: PAYMENT_LOGOS.gopay,
-      transactionId: 'EDP-TRX-20240812-4411',
-      baseAmount: 200000,
-      adminFee: 1500,
-      totalAmount: 201500,
-    },
-  },
-
-  // ─── 5. SERAGAM & SARANA ─────────────────────────────────────────
-  {
-    id: 'bill-seragam-lengkap',
-    title: 'Paket Seragam Lengkap & Batik Siswa',
-    subtitle: '3 Stel Seragam • Lunas 10 Jul 2024',
-    amount: 550000,
-    category: 'sarana',
-    categoryLabel: 'Seragam & Sarana',
-    dueDate: '10 Jul 2024',
-    status: 'paid',
-    paidAt: '10 Jul 2024, 13:20 WIB',
-    iconName: 'shirt-outline',
-    iconBg: '#ECFDF5',
-    iconColor: '#059669',
-    invoice: {
-      invoiceNo: 'INV/20240710/SRG-01/1004',
-      paidAt: '10 Jul 2024, 13:20 WIB',
-      paymentMethod: 'BCA Virtual Account',
-      paymentLogo: PAYMENT_LOGOS.bca_va,
-      transactionId: 'EDP-TRX-20240710-6602',
-      baseAmount: 550000,
-      adminFee: 2500,
-      totalAmount: 552500,
-    },
-  },
-];
+const ALL_STUDENT_BILLS_DATA = [];
 
 const ALL_PAYMENT_METHODS = [
   // ─── 1. VIRTUAL ACCOUNT ─────────────────────────────────────────
@@ -1020,64 +711,27 @@ export default function SchoolBillingScreen({ onBack, onNavigateToWallet }) {
 
   // Fetch data tagihan real-time dari Laravel API
   const fetchBillsData = useCallback(async (showLoading = true) => {
-    // ── Stale-While-Revalidate: tampilkan cache dulu, update di background ──
-    try {
-      const cached = await AsyncStorage.getItem(BILLS_CACHE_KEY);
-      if (cached) {
-        const { bills: cachedBills, allBills, student, stats, years, cats } = JSON.parse(cached);
-        if (cachedBills?.length > 0) {
-          setBills(cachedBills);
-          setAllStudentBills(allBills || []);
-          if (student) setStudentInfo(student);
-          if (stats) setRawStats(stats);
-          if (years?.length) setAcademicYears(years);
-          if (cats?.length) setCategoriesList(cats);
-          setIsLoading(false); // cache langsung tampil, tidak perlu loader
-        }
-      }
-    } catch (_) {}
+    if (showLoading) setIsLoading(true);
 
-    // ── Fetch dari API (background jika sudah ada cache) ──
-    setApiError(null);
+    // ── Fetch dari API ──
     try {
       const res = await billingApi.getMyBills({
         academic_year_id: selectedAcademicYear,
       });
 
       if (res && res.success) {
+        setApiError(null);
         const apiBills = res.data || [];
-        if (apiBills.length > 0) {
-          setAllStudentBills(apiBills);
+        setAllStudentBills(apiBills);
 
-          const unpaidBills = apiBills.filter((b) => b.status !== 'paid');
-          setBills(unpaidBills);
+        const unpaidBills = apiBills.filter((b) => b.status !== 'paid');
+        setBills(unpaidBills);
 
-          if (unpaidBills.length > 0) {
-            const firstSelectable = unpaidBills.find((b) => !b.parent_unpaid) || unpaidBills[0];
-            setSelectedBillIds([firstSelectable.id]);
-          } else {
-            setSelectedBillIds([]);
-          }
-
-          // ── Simpan ke cache untuk next open ──
-          const cachePayload = {
-            bills: unpaidBills,
-            allBills: apiBills,
-            student: res.student || null,
-            stats: res.stats || null,
-            years: res.academic_years || [],
-            cats: res.categories?.length
-              ? [
-                  { id: 'all', label: `Semua (${apiBills.length})` },
-                  ...res.categories.map((c) => ({ id: c.id, label: `${c.label} (${c.count})` })),
-                ]
-              : [],
-          };
-          AsyncStorage.setItem(BILLS_CACHE_KEY, JSON.stringify(cachePayload)).catch(() => {});
+        if (unpaidBills.length > 0) {
+          const firstSelectable = unpaidBills.find((b) => !b.parent_unpaid) || unpaidBills[0];
+          setSelectedBillIds([firstSelectable.id]);
         } else {
-          setBills(INITIAL_BILLS_DATA);
-          setAllStudentBills(ALL_STUDENT_BILLS_DATA);
-          setSelectedBillIds([INITIAL_BILLS_DATA[0].id]);
+          setSelectedBillIds([]);
         }
 
         if (res.student) setStudentInfo(res.student);
@@ -1090,16 +744,17 @@ export default function SchoolBillingScreen({ onBack, onNavigateToWallet }) {
           ]);
         }
       } else {
-        setBills(INITIAL_BILLS_DATA);
-        setAllStudentBills(ALL_STUDENT_BILLS_DATA);
-        setSelectedBillIds([INITIAL_BILLS_DATA[0].id]);
+        setBills([]);
+        setAllStudentBills([]);
+        setSelectedBillIds([]);
+        setApiError(res?.message || 'Gagal memuat data tagihan.');
       }
     } catch (err) {
-      console.warn('[SchoolBillingScreen] Fetch bills network fallback:', err?.message || err);
-      setApiError(err?.message || 'Gagal terhubung ke server tagihan.');
-      setBills(INITIAL_BILLS_DATA);
-      setAllStudentBills(ALL_STUDENT_BILLS_DATA);
-      setSelectedBillIds([INITIAL_BILLS_DATA[0].id]);
+      console.warn('[SchoolBillingScreen] Fetch bills network error:', err?.message || err);
+      setApiError(err?.message || 'Gagal terhubung ke server.');
+      setBills([]);
+      setAllStudentBills([]);
+      setSelectedBillIds([]);
     } finally {
       setIsLoading(false);
       setIsRefreshing(false);
@@ -1169,15 +824,67 @@ export default function SchoolBillingScreen({ onBack, onNavigateToWallet }) {
     setCurrentStep('invoice');
   };
 
-  // Handler bagikan kwitansi/invoice resmi
-  const handleShareInvoice = async (bill) => {
-    if (!bill) return;
+  // Handler bagikan kwitansi/invoice resmi (Format seragam untuk Bukti Pembayaran & Lihat Kwitansi)
+  const handleShareInvoice = async (bill, overrideData = null) => {
+    const target = bill || selectedBills[0] || nextUrgentBill || bills[0] || {};
     try {
-      const inv = bill.invoice || {};
-      const shareMsg = `KWITANSI RESMI PEMBAYARAN SEKOLAH\n${studentInfo.schoolName || 'Inobel Smart Academy'}\n\nNo. Kwitansi: ${inv.invoiceNo || 'KWT-' + bill.id}\nTagihan: ${bill.title}\nKategori: ${bill.categoryLabel}\nNominal: Rp ${(bill.total_amount || bill.amount || 0).toLocaleString('id-ID')}\nStatus: LUNAS (Terverifikasi)\nTanggal Bayar: ${inv.paidAt || bill.paidAt || '-'}\nMetode: ${inv.paymentMethod || '-'}\nID Transaksi: ${inv.transactionId || '-'}\nNama Siswa: ${studentInfo.fullName} (${studentInfo.nisn})\nKelas: ${studentInfo.className}\n\nDokumen pembayaran sah dan tercatat pada sistem digital Inobel EduPay.`;
+      const inv = target.invoice || {};
+      const billIdPad = target.id ? String(target.id).padStart(6, '0') : '000042';
+
+      const invoiceNo = overrideData?.invoiceNumber || target.nomor_invoice || inv.invoiceNo || `#INV-${billIdPad}`;
+      const journalNo = overrideData?.journalNumber || target.nomor_jurnal || target.nomor_jurnal_pembukuan || null;
+      const refNo = overrideData?.referenceNumber || target.nomor_referensi || inv.transactionId || null;
+
+      const studentName = overrideData?.studentName || target.nama_siswa || studentInfo?.fullName || studentInfo?.name || STUDENT_DATA.fullName;
+      const studentNisn = overrideData?.studentNisn || target.nisn_siswa || studentInfo?.nisn || STUDENT_DATA.nisn;
+      const studentClass = overrideData?.studentClass || studentInfo?.className || STUDENT_DATA.className;
+      const schoolName = studentInfo?.schoolName || 'Inobel Smart Academy';
+
+      const title = overrideData?.title || target.title || (selectedBills.length > 1 ? `${selectedBills.length} Tagihan Terpilih` : 'Tagihan Sekolah');
+      const category = target.categoryLabel || target.category || 'Biaya Pendidikan';
+
+      const total = overrideData?.totalAmount ?? (target.total_amount || target.amount || grandTotalCheckout || 0);
+      const paidTime = overrideData?.transactionTime || target.waktu_transaksi_format || inv.paidAt || target.paidAt || 'Telah Diverifikasi';
+      const paymentChannel = overrideData?.channelName || target.channel_pembayaran || inv.paymentMethod || selectedMethod?.name || 'Virtual Account';
+
+      const identifier = target.id || target.nomor_pembayaran || overrideData?.referenceNumber || 1;
+      const pdfUrl = billingApi.getInvoicePdfUrl(identifier);
+      const verifyUrl = billingApi.getInvoiceVerifyUrl(identifier);
+
+      let message = `*KWITANSI RESMI PEMBAYARAN SEKOLAH*\n${schoolName}\n`;
+      message += `----------------------------------------\n`;
+      message += `No. Kwitansi: ${invoiceNo}\n`;
+      if (journalNo) {
+        message += `No. Jurnal: ${journalNo}\n`;
+      }
+      if (refNo) {
+        message += `No. Referensi: ${refNo}\n`;
+      }
+      message += `Status: LUNAS (Terverifikasi)\n`;
+      message += `Tanggal/Waktu: ${paidTime}\n`;
+      message += `Metode Pembayaran: ${paymentChannel}\n`;
+      message += `----------------------------------------\n`;
+      message += `*DATA SISWA*\n`;
+      message += `Nama: ${studentName}\n`;
+      message += `NISN: ${studentNisn}\n`;
+      message += `Kelas: ${studentClass}\n`;
+      message += `----------------------------------------\n`;
+      message += `*RINCIAN TAGIHAN*\n`;
+      message += `Tagihan: ${title}\n`;
+      if (category) {
+        message += `Kategori: ${category}\n`;
+      }
+      message += `Total Bayar: Rp ${Number(total).toLocaleString('id-ID')}\n`;
+      message += `----------------------------------------\n`;
+      message += `*VERIFIKASI KEABSAHAN RESMI (UU ITE)*\n`;
+      message += `${verifyUrl}\n\n`;
+      message += `*UNDUH KWITANSI FORMAL (PDF)*\n`;
+      message += `${pdfUrl}\n\n`;
+      message += `Dokumen pembayaran sah dan tercatat pada sistem digital Inobel EduPay.`;
+
       await Share.share({
-        message: shareMsg,
-        title: `Kwitansi Resmi - ${bill.title}`,
+        message,
+        title: `Kwitansi Resmi Pembayaran - ${studentName}`,
       });
     } catch (err) {
       console.log('Error sharing invoice:', err);
@@ -1229,8 +936,10 @@ export default function SchoolBillingScreen({ onBack, onNavigateToWallet }) {
 
   // State Layar 3 (Menunggu Pembayaran)
   const [countdown, setCountdown] = useState({ hours: 23, minutes: 55, seconds: 10 });
-  const [expandedGuide, setExpandedGuide] = useState('bsi'); // 'bsi' | 'mbca' | 'klikbca' | 'atm'
+  const [expandedGuide, setExpandedGuide] = useState(null); // 'bsi' | 'other_banks' | 'ewallet' | 'retail' (default hidden / null)
   const [copiedKey, setCopiedKey] = useState(null);
+  const [isCheckingPayment, setIsCheckingPayment] = useState(false);
+  const [successReceiptBill, setSuccessReceiptBill] = useState(null);
   const [isTransitioningSuccess, setIsTransitioningSuccess] = useState(false);
   const successModalScale = useRef(new Animated.Value(0.3)).current;
   const successModalOpacity = useRef(new Animated.Value(0)).current;
@@ -1476,14 +1185,17 @@ export default function SchoolBillingScreen({ onBack, onNavigateToWallet }) {
   };
 
   // Fungsi Transisi Animasi Sukses Menuju Layar Kwitansi (Menyatu & Kekinian)
-  const triggerSuccessTransition = () => {
+  const triggerSuccessTransition = (paidBill = null) => {
+    if (paidBill) {
+      setSuccessReceiptBill(paidBill);
+    }
     fetchBillsData(false);
     setCurrentStep('success');
   };
 
   // Fungsi Mengunduh Kwitansi Formal PDF Resmi (Sama dengan format PDF di Web)
   const handleDownloadFormalPdf = async () => {
-    const target = selectedBills[0] || nextUrgentBill || bills[0];
+    const target = successReceiptBill || selectedBills[0] || nextUrgentBill || bills[0];
     const identifier = target?.id || target?.nomor_pembayaran || 1;
 
     const pdfUrl = billingApi.getInvoicePdfUrl(identifier);
@@ -1528,17 +1240,27 @@ export default function SchoolBillingScreen({ onBack, onNavigateToWallet }) {
     if (currentStep !== 'waiting') return;
 
     let isMounted = true;
-    const targetBill = selectedBills[0] || nextUrgentBill;
-    const checkTarget = targetBill?.nomor_pembayaran || targetBill?.id;
+    const targetBill =
+      selectedBills[0] ||
+      bills.find((b) => selectedBillIds.map(String).includes(String(b.id || b.bill_id))) ||
+      nextUrgentBill ||
+      bills[0];
+    const checkTarget = targetBill?.nomor_pembayaran || targetBill?.id || targetBill?.bill_id;
 
     if (!checkTarget) return;
 
     const pollTimer = setInterval(async () => {
       try {
         const res = await billingApi.checkStatus(checkTarget);
-        if (isMounted && res && (res.status === 'paid' || res.is_paid)) {
+        if (isMounted && res && (res.status === 'paid' || res.is_paid || res.status === 'settlement' || res.status === 'confirmed')) {
           clearInterval(pollTimer);
-          triggerSuccessTransition();
+          const completedBill = {
+            ...targetBill,
+            status: 'paid',
+            isPaid: true,
+            waktu_transaksi: res.waktu_transaksi || targetBill?.waktu_transaksi,
+          };
+          triggerSuccessTransition(completedBill);
         }
       } catch (e) {
         // Silent catch saat polling berkala di latar belakang
@@ -1549,7 +1271,7 @@ export default function SchoolBillingScreen({ onBack, onNavigateToWallet }) {
       isMounted = false;
       clearInterval(pollTimer);
     };
-  }, [currentStep, selectedBills, nextUrgentBill]);
+  }, [currentStep, selectedBills, nextUrgentBill, bills, selectedBillIds]);
 
   // Sinkronisasi otomatis nomor_pembayaran & kode_biller dari database jika belum ada
   useEffect(() => {
@@ -1766,12 +1488,30 @@ export default function SchoolBillingScreen({ onBack, onNavigateToWallet }) {
 
   // Handler Cek Status Pembayaran Real-time
   const handleCheckPaymentStatus = async () => {
-    const targetBill = selectedBills[0] || nextUrgentBill;
-    const checkTarget = targetBill?.nomor_pembayaran || targetBill?.id;
+    if (isCheckingPayment) return;
+    const targetBill =
+      selectedBills[0] ||
+      bills.find((b) => selectedBillIds.map(String).includes(String(b.id || b.bill_id))) ||
+      nextUrgentBill ||
+      bills[0];
+    const checkTarget = targetBill?.nomor_pembayaran || targetBill?.id || targetBill?.bill_id;
+
+    if (!checkTarget) {
+      Alert.alert('Perhatian', 'Nomor pembayaran atau ID tagihan tidak ditemukan.');
+      return;
+    }
+
+    setIsCheckingPayment(true);
     try {
       const res = await billingApi.checkStatus(checkTarget);
-      if (res && (res.status === 'paid' || res.is_paid)) {
-        triggerSuccessTransition();
+      if (res && (res.status === 'paid' || res.is_paid || res.status === 'settlement' || res.status === 'confirmed')) {
+        const completedBill = {
+          ...targetBill,
+          status: 'paid',
+          isPaid: true,
+          waktu_transaksi: res.waktu_transaksi || targetBill?.waktu_transaksi,
+        };
+        triggerSuccessTransition(completedBill);
       } else {
         Alert.alert(
           'Status Pembayaran',
@@ -1784,34 +1524,9 @@ export default function SchoolBillingScreen({ onBack, onNavigateToWallet }) {
         'Info Pembayaran',
         'Menunggu sinkronisasi perbankan otomatis. Silakan refresh status kembali beberapa saat lagi.'
       );
+    } finally {
+      setIsCheckingPayment(false);
     }
-  };
-
-  // Handler Simulasi Pembayaran Lunas (Khusus Testing UI & Animasi Transisi)
-  const handleSimulatePaymentSuccess = () => {
-    const target = selectedBills[0] || nextUrgentBill;
-    if (target) {
-      setBills((prev) =>
-        prev.map((b) =>
-          String(b.id) === String(target.id)
-            ? { ...b, status: 'paid', isPaid: true }
-            : b
-        )
-      );
-      setAllStudentBills((prev) =>
-        prev.map((b) =>
-          String(b.id) === String(target.id)
-            ? {
-              ...b,
-              status: 'paid',
-              isPaid: true,
-              paidAt: 'Hari ini, ' + new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WIB',
-            }
-            : b
-        )
-      );
-    }
-    triggerSuccessTransition();
   };
 
   // Kalkulasi Total Layar 1
@@ -2916,6 +2631,7 @@ export default function SchoolBillingScreen({ onBack, onNavigateToWallet }) {
         <TouchableOpacity
           style={[styles.checkoutCtaButtonWrapper, { marginTop: 24 }]}
           onPress={handleCheckPaymentStatus}
+          disabled={isCheckingPayment}
           activeOpacity={0.85}
         >
           <LinearGradient
@@ -2924,27 +2640,18 @@ export default function SchoolBillingScreen({ onBack, onNavigateToWallet }) {
             end={{ x: 1, y: 0 }}
             style={styles.checkoutCtaButtonGradient}
           >
-            <Ionicons name="refresh-circle-outline" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
-            <Text style={styles.checkoutCtaButtonText}>Cek Status Pembayaran</Text>
+            {isCheckingPayment ? (
+              <>
+                <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 8 }} />
+                <Text style={styles.checkoutCtaButtonText}>Memeriksa Status...</Text>
+              </>
+            ) : (
+              <>
+                <Ionicons name="refresh-circle-outline" size={20} color="#FFFFFF" style={{ marginRight: 8 }} />
+                <Text style={styles.checkoutCtaButtonText}>Cek Status Pembayaran</Text>
+              </>
+            )}
           </LinearGradient>
-        </TouchableOpacity>
-
-        {/* Tombol Simulasi Pembayaran Lunas (Khusus Testing UI & Animasi) */}
-        <TouchableOpacity
-          style={[
-            styles.simulationPaySuccessBtn,
-            {
-              backgroundColor: isDark ? 'rgba(16, 185, 129, 0.12)' : '#ECFDF5',
-              borderColor: isDark ? 'rgba(16, 185, 129, 0.45)' : '#6EE7B7',
-            },
-          ]}
-          onPress={handleSimulatePaymentSuccess}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="checkmark-done-circle" size={17} color="#059669" style={{ marginRight: 6 }} />
-          <Text style={[styles.simulationPaySuccessText, { color: isDark ? '#34D399' : '#059669' }]}>
-            Simulasi Pembayaran Lunas (Tes Animasi)
-          </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
@@ -2964,7 +2671,7 @@ export default function SchoolBillingScreen({ onBack, onNavigateToWallet }) {
   // 4. LAYAR 4: BUKTI PEMBAYARAN (KWITANSI DIGITAL RESMI & LUNAS)
   // ═══════════════════════════════════════════════════════════════════════════
   const renderScreenSuccess = () => {
-    const targetBill = selectedBills[0] || nextUrgentBill || bills[0];
+    const targetBill = successReceiptBill || selectedBills[0] || nextUrgentBill || bills[0];
     const billIdPad = targetBill?.id ? String(targetBill.id).padStart(6, '0') : '000042';
     const invoiceNumber = targetBill?.nomor_invoice || targetBill?.invoice?.invoiceNo || `#INV-${billIdPad}`;
     const journalNumber = targetBill?.nomor_jurnal || targetBill?.nomor_jurnal_pembukuan || `JRN-${new Date().getFullYear()}${(new Date().getMonth() + 1).toString().padStart(2, '0')}${new Date().getDate().toString().padStart(2, '0')}-${String(targetBill?.id || 42).padStart(4, '0')}`;
@@ -2995,7 +2702,7 @@ export default function SchoolBillingScreen({ onBack, onNavigateToWallet }) {
     const studentNisn = targetBill?.nisn_siswa || studentInfo?.nisn || STUDENT_DATA.nisn;
     const studentClass = studentInfo?.className || STUDENT_DATA.className;
     const academicYear = targetBill?.tahun_ajaran || studentInfo?.academicYear || STUDENT_DATA.academicYear;
-    const totalAmount = grandTotalCheckout || targetBill?.amount || 0;
+    const totalAmount = grandTotalCheckout || targetBill?.amount || targetBill?.total_amount || 0;
     const stampDateText = new Date().toLocaleDateString('id-ID', {
       day: '2-digit',
       month: '2-digit',
@@ -3431,13 +3138,13 @@ export default function SchoolBillingScreen({ onBack, onNavigateToWallet }) {
 
           {/* Itemized list */}
           <View style={styles.cleanItemList}>
-            {selectedBills.map((bill) => (
-              <View key={bill.id} style={styles.cleanItemRow}>
+            {(successReceiptBill ? [successReceiptBill] : (selectedBills.length > 0 ? selectedBills : [targetBill].filter(Boolean))).map((bill) => (
+              <View key={bill.id || 'receipt-item'} style={styles.cleanItemRow}>
                 <Text style={[styles.cleanItemName, { color: textPrimary }]} numberOfLines={1}>
-                  {bill.title}
+                  {bill.title || 'Tagihan Pendidikan'}
                 </Text>
                 <Text style={[styles.cleanItemAmount, { color: textPrimary }]}>
-                  Rp {bill.amount.toLocaleString('id-ID')}
+                  Rp {(bill.amount || bill.total_amount || 0).toLocaleString('id-ID')}
                 </Text>
               </View>
             ))}
@@ -3493,14 +3200,34 @@ export default function SchoolBillingScreen({ onBack, onNavigateToWallet }) {
               </View>
             </View>
 
-            {/* QR Code Keabsahan (Sama persis dengan format Web Kwitansi PDF) */}
-            <View style={[styles.ticketQrBadgeContainer, { backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderColor: isDark ? '#334155' : '#CBD5E1' }]}>
-              <View style={styles.ticketQrIconWrap}>
-                <Ionicons name="qr-code" size={44} color={isDark ? '#F8FAFC' : '#0F172A'} />
-              </View>
-              <Text style={[styles.ticketQrVerifiedText, { color: textPrimary }]}>SECURE VERIFIED</Text>
-              <Text style={styles.ticketQrCodeText}>{h2hVerificationCode}</Text>
-            </View>
+            {/* QR Code Validasi Pembayaran Elektronik (H2H Banking) */}
+            {(() => {
+              const target = targetBill || selectedBills[0] || nextUrgentBill || bills[0];
+              const identifier = target?.id || target?.nomor_pembayaran || 1;
+              const verifyUrl = target?.verify_url || billingApi.getInvoiceVerifyUrl(identifier);
+              const qrSourceUri = target?.qr_code_data_uri || billingApi.getInvoiceQrUrl(identifier);
+
+              return (
+                <TouchableOpacity
+                  style={[styles.ticketQrBadgeContainer, { backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderColor: isDark ? '#334155' : '#CBD5E1' }]}
+                  onPress={() => {
+                    Linking.openURL(verifyUrl).catch(() => {});
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.ticketQrIconWrap}>
+                    <Image
+                      source={{ uri: qrSourceUri }}
+                      style={styles.realQrCodeImage}
+                      resizeMode="contain"
+                    />
+                  </View>
+                  <Text style={[styles.ticketQrVerifiedText, { color: textPrimary }]}>SECURE VERIFIED</Text>
+                  <Text style={styles.ticketQrCodeText}>{h2hVerificationCode}</Text>
+                  <Text style={styles.ticketQrScanHint}>Scan / Ketuk QR</Text>
+                </TouchableOpacity>
+              );
+            })()}
           </View>
         </Animated.View>
 
@@ -3524,12 +3251,16 @@ export default function SchoolBillingScreen({ onBack, onNavigateToWallet }) {
         <TouchableOpacity
           style={[styles.outlineSecondaryButton, { borderColor, marginTop: 10 }]}
           onPress={() => {
-            const target = selectedBills[0] || nextUrgentBill || bills[0];
-            const identifier = target?.id || target?.nomor_pembayaran || 1;
-            const pdfUrl = billingApi.getInvoicePdfUrl(identifier);
-            Share.share({
-              message: `Kwitansi Resmi Pembayaran Siswa\nNo. Invoice: ${invoiceNumber}\nNo. Jurnal: ${journalNumber}\nNo. Referensi: ${referenceNumber}\nNama Siswa: ${studentName} (${studentClass})\nStatus: LUNAS (Verified)\nTotal: Rp ${totalAmount.toLocaleString('id-ID')}\nUnduh Berkas PDF Formal: ${pdfUrl}`,
-              title: 'Kwitansi Tagihan Sekolah',
+            handleShareInvoice(targetBill, {
+              invoiceNumber,
+              journalNumber,
+              referenceNumber,
+              studentName,
+              studentNisn,
+              studentClass,
+              totalAmount,
+              transactionTime,
+              channelName,
             });
           }}
           activeOpacity={0.7}
@@ -3543,6 +3274,7 @@ export default function SchoolBillingScreen({ onBack, onNavigateToWallet }) {
         <TouchableOpacity
           style={[styles.outlineSecondaryButton, { borderColor, marginTop: 10 }]}
           onPress={() => {
+            setSuccessReceiptBill(null);
             if (onBack) {
               onBack();
             } else {
@@ -3947,7 +3679,7 @@ export default function SchoolBillingScreen({ onBack, onNavigateToWallet }) {
         {/* Category Horizontal Scroll Chips */}
         <View style={styles.cleanCategoryScrollWrapper}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.cleanCategoryScrollContent}>
-            {ALL_BILLS_CATEGORIES.map((cat) => {
+            {(categoriesList || ALL_BILLS_CATEGORIES).map((cat) => {
               const isCatSelected = selectedCategoryFilter === cat.id;
               return (
                 <TouchableOpacity
@@ -4344,15 +4076,34 @@ export default function SchoolBillingScreen({ onBack, onNavigateToWallet }) {
                 </View>
               ) : null}
             </View>
-            <View style={[styles.ticketQrBadgeContainer, { backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderColor: isDark ? '#334155' : '#CBD5E1' }]}>
-              <View style={styles.ticketQrIconWrap}>
-                <Ionicons name="qr-code" size={44} color={isDark ? '#F8FAFC' : '#0F172A'} />
-              </View>
-              <Text style={[styles.ticketQrVerifiedText, { color: textPrimary }]}>SECURE VERIFIED</Text>
-              <Text style={styles.ticketQrCodeText}>
-                {selectedInvoiceBill?.kode_keabsahan || `H2H-${String(selectedInvoiceBill?.id || '').padStart(8, '0')}`}
-              </Text>
-            </View>
+            {/* QR Code Validasi Pembayaran Elektronik (H2H Banking) */}
+            {(() => {
+              const identifier = selectedInvoiceBill?.id || selectedInvoiceBill?.nomor_pembayaran || 1;
+              const verifyUrl = selectedInvoiceBill?.verify_url || billingApi.getInvoiceVerifyUrl(identifier);
+              const qrSourceUri = selectedInvoiceBill?.qr_code_data_uri || billingApi.getInvoiceQrUrl(identifier);
+              const verCode = selectedInvoiceBill?.kode_keabsahan || `H2H-${String(selectedInvoiceBill?.id || '').padStart(8, '0')}`;
+
+              return (
+                <TouchableOpacity
+                  style={[styles.ticketQrBadgeContainer, { backgroundColor: isDark ? '#1E293B' : '#FFFFFF', borderColor: isDark ? '#334155' : '#CBD5E1' }]}
+                  onPress={() => {
+                    Linking.openURL(verifyUrl).catch(() => {});
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.ticketQrIconWrap}>
+                    <Image
+                      source={{ uri: qrSourceUri }}
+                      style={styles.realQrCodeImage}
+                      resizeMode="contain"
+                    />
+                  </View>
+                  <Text style={[styles.ticketQrVerifiedText, { color: textPrimary }]}>SECURE VERIFIED</Text>
+                  <Text style={styles.ticketQrCodeText}>{verCode}</Text>
+                  <Text style={styles.ticketQrScanHint}>Scan / Ketuk QR</Text>
+                </TouchableOpacity>
+              );
+            })()}
           </View>
         </View>
 
@@ -4378,6 +4129,16 @@ export default function SchoolBillingScreen({ onBack, onNavigateToWallet }) {
       </ScrollView>
     );
   };
+
+  if (apiError) {
+    return (
+      <ServerConnectionError
+        onRetry={() => fetchBillsData(true)}
+        isRetrying={isLoading}
+        errorMessage={apiError}
+      />
+    );
+  }
 
   return (
     <View style={[styles.rootScreenContainer, { backgroundColor: bgColor, paddingTop: dynamicTopPadding }]}>
@@ -6991,10 +6752,10 @@ const styles = StyleSheet.create({
     lineHeight: 15,
   },
   ticketQrBadgeContainer: {
-    width: 88,
+    width: 92,
     paddingVertical: 6,
-    paddingHorizontal: 6,
-    borderRadius: 8,
+    paddingHorizontal: 5,
+    borderRadius: 10,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
@@ -7003,13 +6764,23 @@ const styles = StyleSheet.create({
   ticketQrIconWrap: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 2,
+    marginBottom: 3,
+    backgroundColor: '#FFFFFF',
+    padding: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  realQrCodeImage: {
+    width: 62,
+    height: 62,
   },
   ticketQrVerifiedText: {
-    fontSize: 6.5,
+    fontSize: 7,
     fontWeight: '800',
     letterSpacing: 0.5,
     textAlign: 'center',
+    marginTop: 1,
   },
   ticketQrCodeText: {
     fontSize: 6.5,
@@ -7018,6 +6789,13 @@ const styles = StyleSheet.create({
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
     textAlign: 'center',
     marginTop: 1,
+  },
+  ticketQrScanHint: {
+    fontSize: 6.5,
+    fontWeight: '700',
+    color: '#10B981',
+    letterSpacing: 0.2,
+    marginTop: 2,
   },
 
   // ── Tombol Simulasi Khusus Test UI Animasi ───
