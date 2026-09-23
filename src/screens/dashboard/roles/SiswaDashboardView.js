@@ -13,6 +13,7 @@ import {
   TextInput,
   KeyboardAvoidingView,
   Platform,
+  Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,6 +24,7 @@ import { useCanteen } from '../../../hooks/useCanteen';
 import { dashboardApi } from '../../../api/dashboardApi';
 import { courseApi } from '../../../api/courseApi';
 import { attendanceApi } from '../../../api/attendanceApi';
+import { getCourseImageUrl } from '../../../utils/media';
 import AppButton from '../../../components/common/AppButton';
 import ServerConnectionError from '../../../components/common/ServerConnectionError';
 
@@ -711,8 +713,16 @@ export default function SiswaDashboardView({
               activeOpacity={0.88}
             >
               <View style={styles.courseHeader}>
-                <View style={[styles.courseIconBox, { backgroundColor: isDark ? theme.surfaceMuted : '#EEF2FF' }]}>
-                  <Ionicons name={c.icon || 'school-outline'} size={20} color={c.accentColor || theme.primary} />
+                <View style={[styles.courseIconBox, { backgroundColor: isDark ? theme.surfaceMuted : '#EEF2FF', overflow: 'hidden' }]}>
+                  {getCourseImageUrl(c.thumbnailUrl || c.thumbnail) ? (
+                    <Image
+                      source={{ uri: getCourseImageUrl(c.thumbnailUrl || c.thumbnail) }}
+                      style={{ width: '100%', height: '100%' }}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <Ionicons name={c.icon || 'school-outline'} size={20} color={c.accentColor || theme.primary} />
+                  )}
                 </View>
                 <View style={styles.courseMetaCol}>
                   <Text

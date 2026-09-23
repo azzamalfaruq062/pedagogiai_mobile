@@ -10,6 +10,7 @@ import { useTheme } from '../../hooks/useTheme';
 import { useAuth } from '../../hooks/useAuth';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { courseApi } from '../../api/courseApi';
+import { CONFIG } from '../../config';
 
 import { CourseCardSkeleton } from '../../components/common/SkeletonLoader';
 
@@ -42,10 +43,19 @@ const LEVEL_META = {
   advanced: { label: 'Mahir', bg: 'rgba(237,233,254,0.95)', color: '#6B21A8' },
 };
 
+import { getCourseImageUrl } from '../../utils/media';
+export { getCourseImageUrl };
+
 function CourseCard({ course, onPress, onEdit, theme, isDark, isGuru }) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
+  const [imgError, setImgError] = useState(false);
   const levelMeta = LEVEL_META[course.level] || LEVEL_META.beginner;
   const canEdit = isGuru && (course.isMine || course.user_id === undefined || course.is_creator);
+
+  // Check if course has a valid image
+  const rawImage = course.thumbnailUrl || course.thumbnail || course.image || null;
+  const resolvedImageUrl = useMemo(() => getCourseImageUrl(rawImage), [rawImage]);
+  const hasImage = Boolean(resolvedImageUrl) && !imgError;
 
   const handlePressIn = () =>
     Animated.spring(scaleAnim, { toValue: 0.965, useNativeDriver: true, speed: 30, bounciness: 0 }).start();
@@ -61,35 +71,71 @@ function CourseCard({ course, onPress, onEdit, theme, isDark, isGuru }) {
         activeOpacity={1}
         style={[styles.card, { backgroundColor: theme.surface, borderColor: isDark ? theme.border : '#E8EDF4' }]}
       >
-        {/* Thumbnail */}
+        {/* Thumbnail: Real image if available, otherwise original gradient fallback */}
         <View style={styles.thumbnailWrap}>
-          <LinearGradient colors={course.gradientColors || ['#1C2E5A', '#2D4B8E']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.thumbnailGrad}>
-            <View style={styles.thumbBg1} />
-            <View style={styles.thumbBg2} />
-            <View style={styles.thumbIcon}>
-              <Ionicons name="library" size={44} color="rgba(255,255,255,0.15)" />
+          {hasImage ? (
+            <View style={styles.thumbImageContainer}>
+              <Image
+                source={{ uri: resolvedImageUrl }}
+                style={styles.thumbCoverImage}
+                resizeMode="cover"
+                onError={() => setImgError(true)}
+              />
+              <LinearGradient
+                colors={['rgba(15,23,42,0.5)', 'rgba(15,23,42,0.05)', 'rgba(15,23,42,0.72)']}
+                style={styles.thumbOverlayGrad}
+              >
+                <View style={styles.thumbTopRow}>
+                  <View style={[styles.levelBadge, { backgroundColor: levelMeta.bg }]}>
+                    <Text style={[styles.levelBadgeText, { color: levelMeta.color }]}>{levelMeta.label}</Text>
+                  </View>
+                  {course.status && (
+                    <View style={[styles.statusBadge, { backgroundColor: course.status === 'published' ? 'rgba(209,250,229,0.95)' : 'rgba(254,243,199,0.95)' }]}>
+                      <Text style={[styles.statusBadgeText, { color: course.status === 'published' ? '#065F46' : '#92400E' }]}>
+                        {course.status === 'published' ? 'Aktif' : 'Draft'}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+                {course.isEnrolled && course.progress > 0 && (
+                  <View style={styles.thumbProgressRow}>
+                    <View style={styles.thumbProgressTrack}>
+                      <View style={[styles.thumbProgressFill, { width: `${course.progress}%`, backgroundColor: course.accentColor || '#4F46E5' }]} />
+                    </View>
+                    <Text style={styles.thumbProgressText}>{course.progress}%</Text>
+                  </View>
+                )}
+              </LinearGradient>
             </View>
-            <View style={styles.thumbTopRow}>
-              <View style={[styles.levelBadge, { backgroundColor: levelMeta.bg }]}>
-                <Text style={[styles.levelBadgeText, { color: levelMeta.color }]}>{levelMeta.label}</Text>
+          ) : (
+            <LinearGradient colors={course.gradientColors || ['#1C2E5A', '#2D4B8E']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.thumbnailGrad}>
+              <View style={styles.thumbBg1} />
+              <View style={styles.thumbBg2} />
+              <View style={styles.thumbIcon}>
+                <Ionicons name="library" size={44} color="rgba(255,255,255,0.15)" />
               </View>
-              {course.status && (
-                <View style={[styles.statusBadge, { backgroundColor: course.status === 'published' ? 'rgba(209,250,229,0.95)' : 'rgba(254,243,199,0.95)' }]}>
-                  <Text style={[styles.statusBadgeText, { color: course.status === 'published' ? '#065F46' : '#92400E' }]}>
-                    {course.status === 'published' ? 'Aktif' : 'Draft'}
-                  </Text>
+              <View style={styles.thumbTopRow}>
+                <View style={[styles.levelBadge, { backgroundColor: levelMeta.bg }]}>
+                  <Text style={[styles.levelBadgeText, { color: levelMeta.color }]}>{levelMeta.label}</Text>
+                </View>
+                {course.status && (
+                  <View style={[styles.statusBadge, { backgroundColor: course.status === 'published' ? 'rgba(209,250,229,0.95)' : 'rgba(254,243,199,0.95)' }]}>
+                    <Text style={[styles.statusBadgeText, { color: course.status === 'published' ? '#065F46' : '#92400E' }]}>
+                      {course.status === 'published' ? 'Aktif' : 'Draft'}
+                    </Text>
+                  </View>
+                )}
+              </View>
+              {course.isEnrolled && course.progress > 0 && (
+                <View style={styles.thumbProgressRow}>
+                  <View style={styles.thumbProgressTrack}>
+                    <View style={[styles.thumbProgressFill, { width: `${course.progress}%`, backgroundColor: course.accentColor || '#4F46E5' }]} />
+                  </View>
+                  <Text style={styles.thumbProgressText}>{course.progress}%</Text>
                 </View>
               )}
-            </View>
-            {course.isEnrolled && course.progress > 0 && (
-              <View style={styles.thumbProgressRow}>
-                <View style={styles.thumbProgressTrack}>
-                  <View style={[styles.thumbProgressFill, { width: `${course.progress}%`, backgroundColor: course.accentColor || '#4F46E5' }]} />
-                </View>
-                <Text style={styles.thumbProgressText}>{course.progress}%</Text>
-              </View>
-            )}
-          </LinearGradient>
+            </LinearGradient>
+          )}
         </View>
 
         {/* Body */}
@@ -166,6 +212,75 @@ function CourseCard({ course, onPress, onEdit, theme, isDark, isGuru }) {
         </View>
       </TouchableOpacity>
     </Animated.View>
+  );
+}
+
+// ─── InProgressCard Component ────────────────────────────────────────────────
+function InProgressCard({ course, isDark, theme, onPress }) {
+  const [imgError, setImgError] = useState(false);
+  const rawThumbnail = course?.thumbnailUrl || course?.thumbnail || course?.image || null;
+  const imageUrl = useMemo(() => getCourseImageUrl(rawThumbnail), [rawThumbnail]);
+  const hasImage = Boolean(imageUrl) && !imgError;
+
+  return (
+    <TouchableOpacity
+      style={[
+        styles.inProgCard,
+        {
+          backgroundColor: theme.surface,
+          borderWidth: 0,
+        },
+      ]}
+      onPress={() => onPress && onPress(course)}
+      activeOpacity={0.88}
+    >
+      <View style={styles.inProgThumb}>
+        {hasImage ? (
+          <View style={styles.inProgImageWrap}>
+            <Image
+              source={{ uri: imageUrl }}
+              style={styles.inProgCoverImage}
+              resizeMode="cover"
+              onError={() => setImgError(true)}
+            />
+            <LinearGradient
+              colors={['rgba(15,23,42,0.15)', 'rgba(15,23,42,0.65)']}
+              style={styles.inProgOverlayGrad}
+            />
+          </View>
+        ) : (
+          <LinearGradient
+            colors={course.gradientColors || ['#1C2E5A', '#2D4B8E']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.inProgGrad}
+          >
+            <Ionicons name="library" size={26} color="rgba(255,255,255,0.25)" />
+          </LinearGradient>
+        )}
+      </View>
+      <View style={styles.inProgBody}>
+        <Text style={[styles.inProgTitle, { color: theme.textPrimary }]} numberOfLines={2}>
+          {course.title}
+        </Text>
+        <View style={styles.inProgProgRow}>
+          <View style={[styles.inProgTrack, { backgroundColor: isDark ? theme.border : '#E2E8F0' }]}>
+            <View
+              style={[
+                styles.inProgFill,
+                { width: `${course.progress}%`, backgroundColor: course.accentColor || theme.primary },
+              ]}
+            />
+          </View>
+          <Text style={[styles.inProgPct, { color: course.accentColor || theme.primary }]}>
+            {course.progress}%
+          </Text>
+        </View>
+        <Text style={[styles.inProgSub, { color: theme.textMuted }]}>
+          {Math.round(((course.chaptersCount || 0) * (course.progress || 0)) / 100)}/{course.chaptersCount || 0} Bab
+        </Text>
+      </View>
+    </TouchableOpacity>
   );
 }
 
@@ -660,28 +775,13 @@ export default function CourseListScreen({ onNavigateToCourseDetail, onBack }) {
             </View>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.inProgRow}>
               {inProgress.map((c) => (
-                <TouchableOpacity
+                <InProgressCard
                   key={c.id}
-                  style={[styles.inProgCard, { backgroundColor: theme.surface, borderColor: isDark ? theme.border : '#E2E8F0' }]}
-                  onPress={() => onNavigateToCourseDetail && onNavigateToCourseDetail(c)}
-                  activeOpacity={0.88}
-                >
-                  <LinearGradient colors={c.gradientColors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.inProgThumb}>
-                    <Ionicons name="library" size={26} color="rgba(255,255,255,0.25)" />
-                  </LinearGradient>
-                  <View style={styles.inProgBody}>
-                    <Text style={[styles.inProgTitle, { color: theme.textPrimary }]} numberOfLines={2}>{c.title}</Text>
-                    <View style={styles.inProgProgRow}>
-                      <View style={[styles.inProgTrack, { backgroundColor: isDark ? theme.border : '#E2E8F0' }]}>
-                        <View style={[styles.inProgFill, { width: `${c.progress}%`, backgroundColor: c.accentColor }]} />
-                      </View>
-                      <Text style={[styles.inProgPct, { color: c.accentColor }]}>{c.progress}%</Text>
-                    </View>
-                    <Text style={[styles.inProgSub, { color: theme.textMuted }]}>
-                      {Math.round(c.chaptersCount * c.progress / 100)}/{c.chaptersCount} Bab
-                    </Text>
-                  </View>
-                </TouchableOpacity>
+                  course={c}
+                  theme={theme}
+                  isDark={isDark}
+                  onPress={(course) => onNavigateToCourseDetail && onNavigateToCourseDetail(course)}
+                />
               ))}
             </ScrollView>
           </View>
@@ -1162,13 +1262,27 @@ const styles = StyleSheet.create({
   sectionAction: { fontSize: 12, fontWeight: '600' },
   sectionCount: { fontSize: 12, fontWeight: '500' },
   inProgRow: { gap: 12, paddingRight: 4 },
-  inProgCard: { width: 220, borderRadius: 18, borderWidth: 1, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8, elevation: 2 },
-  inProgThumb: { height: 88, alignItems: 'center', justifyContent: 'center' },
+  inProgCard: {
+    width: 200,
+    borderRadius: 16,
+    borderWidth: 0,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  inProgThumb: { width: '100%', height: 104, overflow: 'hidden', backgroundColor: '#1E293B' },
+  inProgImageWrap: { width: '100%', height: '100%', position: 'relative', overflow: 'hidden' },
+  inProgCoverImage: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
+  inProgOverlayGrad: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
+  inProgGrad: { width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center' },
   inProgBody: { padding: 12 },
-  inProgTitle: { fontSize: 12, fontWeight: '700', marginBottom: 8, lineHeight: 17 },
+  inProgTitle: { fontSize: 13, fontWeight: '700', marginBottom: 8, lineHeight: 18 },
   inProgProgRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
-  inProgTrack: { flex: 1, height: 4, borderRadius: 2 },
-  inProgFill: { height: 4, borderRadius: 2 },
+  inProgTrack: { flex: 1, height: 5, borderRadius: 2.5, overflow: 'hidden' },
+  inProgFill: { height: 5, borderRadius: 2.5 },
   inProgPct: { fontSize: 11, fontWeight: '800' },
   inProgSub: { fontSize: 10, fontWeight: '500' },
   // Grid: alignItems stretch makes all cards in same row equal height
@@ -1177,8 +1291,11 @@ const styles = StyleSheet.create({
   cardWrapper: { width: CARD_WIDTH, alignSelf: 'stretch' },
   // card: flex:1 so it fills the wrapper height end-to-end
   card: { flex: 1, flexDirection: 'column', borderRadius: 20, borderWidth: 1, overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.07, shadowRadius: 10, elevation: 3 },
-  thumbnailWrap: { width: '100%', height: 108 },
+  thumbnailWrap: { width: '100%', height: 108, overflow: 'hidden' },
   thumbnailGrad: { flex: 1, padding: 10, justifyContent: 'space-between' },
+  thumbImageContainer: { width: '100%', height: '100%', position: 'relative', overflow: 'hidden' },
+  thumbCoverImage: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
+  thumbOverlayGrad: { ...StyleSheet.absoluteFillObject, padding: 10, justifyContent: 'space-between' },
   thumbBg1: { position: 'absolute', right: -16, top: -16, width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(255,255,255,0.07)' },
   thumbBg2: { position: 'absolute', left: -10, bottom: -10, width: 60, height: 60, borderRadius: 30, backgroundColor: 'rgba(255,255,255,0.05)' },
   thumbIcon: { position: 'absolute', right: 8, bottom: 6 },

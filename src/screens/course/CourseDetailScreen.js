@@ -1,7 +1,7 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  Dimensions, Animated, Platform, StatusBar, Alert, ActivityIndicator,
+  Dimensions, Animated, Platform, StatusBar, Alert, ActivityIndicator, Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,6 +9,7 @@ import { useTheme } from '../../hooks/useTheme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { courseApi } from '../../api/courseApi';
 import { CourseDetailSkeleton } from '../../components/common/SkeletonLoader';
+import { getCourseImageUrl } from '../../utils/media';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
@@ -155,6 +156,18 @@ export default function CourseDetailScreen({ course: propCourse, onBack, onStart
   const [isLoadingDetail, setIsLoadingDetail] = useState(true);
   const [isEnrolling, setIsEnrolling] = useState(false);
   const [activeSubChapter, setActiveSubChapter] = useState(null);
+  const [heroImgError, setHeroImgError] = useState(false);
+
+  const rawHeroImage =
+    course?.thumbnailUrl ||
+    course?.thumbnail ||
+    course?.image ||
+    propCourse?.thumbnailUrl ||
+    propCourse?.thumbnail ||
+    propCourse?.image ||
+    null;
+  const heroImageUrl = useMemo(() => getCourseImageUrl(rawHeroImage), [rawHeroImage]);
+  const hasHeroImage = Boolean(heroImageUrl) && !heroImgError;
 
   const androidStatusBar = Platform.OS === 'android' ? (StatusBar.currentHeight || 28) : 0;
   const safeTop = Math.max(insets.top || 0, androidStatusBar, Platform.OS === 'android' ? 36 : 44);
@@ -167,16 +180,32 @@ export default function CourseDetailScreen({ course: propCourse, onBack, onStart
     try {
       const res = await courseApi.getCourseDetail(courseId);
       if (res && res.success && res.data) {
-        setCourse(res.data);
+        setCourse((prev) => ({
+          ...res.data,
+          thumbnailUrl: res.data.thumbnailUrl || prev?.thumbnailUrl || propCourse?.thumbnailUrl,
+          thumbnail: res.data.thumbnail || prev?.thumbnail || propCourse?.thumbnail,
+        }));
       }
     } catch (err) {
       console.log('Error fetching course detail from API:', err?.message || err);
     } finally {
       setIsLoadingDetail(false);
     }
-  }, []);
+  }, [propCourse?.thumbnailUrl, propCourse?.thumbnail]);
 
   useEffect(() => {
+    if (propCourse) {
+      setHeroImgError(false);
+      setCourse((prev) => {
+        if (!prev) return propCourse;
+        return {
+          ...propCourse,
+          ...prev,
+          thumbnailUrl: propCourse.thumbnailUrl || prev.thumbnailUrl,
+          thumbnail: propCourse.thumbnail || prev.thumbnail,
+        };
+      });
+    }
     if (propCourse?.id) {
       fetchDetail(propCourse.id);
     }
@@ -237,54 +266,77 @@ export default function CourseDetailScreen({ course: propCourse, onBack, onStart
         contentContainerStyle={[styles.scrollContent, { paddingBottom: dynamicCtaPaddingBottom + 70 }]}
       >
         {/* ── Hero Banner ── */}
-        <LinearGradient
-          colors={course.gradientColors || ['#1C2E5A', '#2B3B8B']}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={[styles.heroBanner, { paddingTop: dynamicHeroPaddingTop }]}
-        >
-          {/* Decorative circles */}
-          <View style={styles.heroBg1} />
-          <View style={styles.heroBg2} />
-          <View style={styles.heroBg3} />
+        <View style={styles.heroBanner}>
+          {hasHeroImage ? (
+            <>
+              <Image
+                source={{ uri: heroImageUrl }}
+                style={styles.heroCoverImage}
+                resizeMode="cover"
+                onError={() => {
+                  console.log('Hero image failed to load:', heroImageUrl);
+                  setHeroImgError(true);
+                }}
+              />
+              <LinearGradient
+                colors={['rgba(15,23,42,0.15)', 'rgba(15,23,42,0.60)']}
+                style={styles.heroCoverOverlay}
+                pointerEvents="none"
+              />
+            </>
+          ) : (
+            <LinearGradient
+              colors={course.gradientColors || ['#1C2E5A', '#2B3B8B']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.heroCoverOverlay}
+            >
+              <View style={styles.heroBg1} />
+              <View style={styles.heroBg2} />
+              <View style={styles.heroBg3} />
+            </LinearGradient>
+          )}
 
-          {/* Back Button — inside hero */}
-          <TouchableOpacity style={styles.backBtn} onPress={onBack} activeOpacity={0.8}>
-            <Ionicons name="arrow-back" size={18} color="#FFFFFF" />
-          </TouchableOpacity>
+          {/* Foreground content with proper paddings */}
+          <View style={[styles.heroContent, { paddingTop: dynamicHeroPaddingTop }]}>
+            {/* Back Button */}
+            <TouchableOpacity style={styles.backBtn} onPress={onBack} activeOpacity={0.8}>
+              <Ionicons name="arrow-back" size={18} color="#FFFFFF" />
+            </TouchableOpacity>
 
-          {/* Badges */}
-          <View style={styles.heroBadgeRow}>
-            <View style={[styles.heroBadge, { backgroundColor: levelMeta.bg }]}>
-              <Text style={[styles.heroBadgeText, { color: levelMeta.color }]}>{levelMeta.label}</Text>
-            </View>
-            <View style={[styles.heroBadge, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
-              <Text style={[styles.heroBadgeText, { color: '#FFF' }]}>{course.category}</Text>
-            </View>
-            {course.isFree && (
-              <View style={[styles.heroBadge, { backgroundColor: '#D1FAE5' }]}>
-                <Text style={[styles.heroBadgeText, { color: '#065F46' }]}>Gratis</Text>
+            {/* Badges */}
+            <View style={styles.heroBadgeRow}>
+              <View style={[styles.heroBadge, { backgroundColor: levelMeta.bg }]}>
+                <Text style={[styles.heroBadgeText, { color: levelMeta.color }]}>{levelMeta.label}</Text>
               </View>
-            )}
-          </View>
-
-          {/* Title */}
-          <Text style={styles.heroTitle}>{course.title}</Text>
-
-          {/* Teacher + Meta row */}
-          <View style={styles.heroMetaRow}>
-            <View style={[styles.heroAvatar, { backgroundColor: `${course.teacherColor}33`, borderColor: 'rgba(255,255,255,0.3)' }]}>
-              <Text style={styles.heroAvatarText}>{course.teacherInitials}</Text>
+              <View style={[styles.heroBadge, { backgroundColor: 'rgba(255,255,255,0.2)' }]}>
+                <Text style={[styles.heroBadgeText, { color: '#FFF' }]}>{course.category}</Text>
+              </View>
+              {course.isFree && (
+                <View style={[styles.heroBadge, { backgroundColor: '#D1FAE5' }]}>
+                  <Text style={[styles.heroBadgeText, { color: '#065F46' }]}>Gratis</Text>
+                </View>
+              )}
             </View>
-            <Text style={styles.heroTeacherName} numberOfLines={1}>{course.teacherName}</Text>
-            <View style={styles.heroDivider} />
-            <Ionicons name="people" size={12} color="rgba(255,255,255,0.7)" />
-            <Text style={styles.heroMetaText}>{course.studentsCount} siswa</Text>
-            <View style={styles.heroDivider} />
-            <Ionicons name="layers" size={12} color="rgba(255,255,255,0.7)" />
-            <Text style={styles.heroMetaText}>{course.chaptersCount} bab</Text>
+
+            {/* Title */}
+            <Text style={styles.heroTitle}>{course.title}</Text>
+
+            {/* Teacher + Meta row */}
+            <View style={styles.heroMetaRow}>
+              <View style={[styles.heroAvatar, { backgroundColor: `${course.teacherColor}33`, borderColor: 'rgba(255,255,255,0.3)' }]}>
+                <Text style={styles.heroAvatarText}>{course.teacherInitials}</Text>
+              </View>
+              <Text style={styles.heroTeacherName} numberOfLines={1}>{course.teacherName}</Text>
+              <View style={styles.heroDivider} />
+              <Ionicons name="people" size={12} color="rgba(255,255,255,0.7)" />
+              <Text style={styles.heroMetaText}>{course.studentsCount} siswa</Text>
+              <View style={styles.heroDivider} />
+              <Ionicons name="layers" size={12} color="rgba(255,255,255,0.7)" />
+              <Text style={styles.heroMetaText}>{course.chaptersCount} bab</Text>
+            </View>
           </View>
-        </LinearGradient>
+        </View>
 
         {/* ── Progress + Stats Card ── */}
         <View style={[styles.card, { backgroundColor: theme.surface, borderColor: isDark ? theme.border : '#E8EDF4' }]}>
@@ -416,10 +468,39 @@ const styles = StyleSheet.create({
 
   // ── Hero ──
   heroBanner: {
-    paddingTop: 52,
-    paddingBottom: 28,
-    paddingHorizontal: 20,
+    width: '100%',
+    position: 'relative',
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
     overflow: 'hidden',
+    backgroundColor: '#0F172A',
+  },
+  heroContent: {
+    width: '100%',
+    paddingHorizontal: 20,
+    paddingBottom: 22,
+  },
+  heroCoverImage: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+  },
+  heroCoverOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
   },
   heroBg1: { position: 'absolute', right: -30, top: -30, width: 160, height: 160, borderRadius: 80, backgroundColor: 'rgba(255,255,255,0.07)' },
   heroBg2: { position: 'absolute', left: -20, bottom: -20, width: 130, height: 130, borderRadius: 65, backgroundColor: 'rgba(255,255,255,0.05)' },
